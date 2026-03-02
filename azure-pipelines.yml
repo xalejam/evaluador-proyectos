@@ -1,0 +1,64 @@
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - develop
+
+pr:
+  branches:
+    include:
+      - "*"
+
+pool:
+  vmImage: "ubuntu-latest"
+
+variables:
+  PYTHON_VERSION: "3.12"
+
+steps:
+  - checkout: self
+    clean: true
+
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: "$(PYTHON_VERSION)"
+    displayName: "Use Python $(PYTHON_VERSION)"
+
+  - script: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+      pip install -r requirements-dev.txt
+    displayName: "Install dependencies"
+
+  - script: |
+      ruff check .
+      black --check .
+    displayName: "Lint and format checks"
+
+  - script: |
+      python - <<'PY'
+      from pathlib import Path
+      import py_compile
+
+      roots = [
+          Path("start.py"),
+          Path("main.py"),
+          Path("ui"),
+          Path("domain"),
+          Path("infra"),
+          Path("tests"),
+      ]
+      for root in roots:
+          if root.is_file():
+              py_compile.compile(str(root), doraise=True)
+              continue
+          for file in root.rglob("*.py"):
+              py_compile.compile(str(file), doraise=True)
+      print("py_compile OK")
+      PY
+    displayName: "Compile check"
+
+  - script: |
+      pytest -q
+    displayName: "Run tests"

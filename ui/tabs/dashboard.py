@@ -1,0 +1,282 @@
+# dashboard.py
+"""
+Módulo de dashboard con métricas generales y visualizaciones
+"""
+
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from ui.tabs.shared import t
+
+def render_dashboard():
+    """Dashboard con métricas generales"""
+    st.header(t('general_dashboard'))
+    
+    projects = st.session_state.excel_manager.get_all_projects()
+    
+    if not projects:
+        st.warning(t('no_projects_dashboard'))
+        return
+    
+    # Métricas principales
+    col1, col2, col3, col4 = st.columns(4)
+    
+    total_projects = len(projects)
+    avg_viability = sum(p['viability_score'] for p in projects) / total_projects
+    total_savings = sum(p['annual_savings'] for p in projects)
+    high_priority = len([p for p in projects if p['priority'] == t('priority_high')])
+    
+    with col1:
+        st.metric(t('total_projects'), total_projects)
+    with col2:
+        st.metric(t('avg_score'), f"{avg_viability:.1f}/100")
+    with col3:
+        st.metric(t('total_savings'), f"${total_savings:,.0f}")
+    with col4:
+        st.metric(t('high_priority'), high_priority)
+    
+    # Row de gráficos principales
+    col_chart1, col_chart2 = st.columns(2)
+    
+    with col_chart1:
+        # Gráfico de distribución de scores
+        st.subheader(t("dashboard_scores_distribution"))
+        
+        scores = [p['viability_score'] for p in projects]
+        fig_hist = px.histogram(
+            x=scores, 
+            nbins=10, 
+            title=t("dashboard_scores_distribution_title"),
+            labels={"x": t("viability_score"), "y": t("dashboard_num_projects")},
+            color_discrete_sequence=['#636EFA']
+        )
+        fig_hist.update_layout(showlegend=False, height=350)
+        st.plotly_chart(fig_hist, use_container_width=True)
+    
+    with col_chart2:
+        # Gráfico de prioridades
+        st.subheader(t("dashboard_priority_distribution"))
+        
+        priorities = [p['priority'] for p in projects]
+        priority_counts = pd.Series(priorities).value_counts()
+        
+        # Colores para cada prioridad
+        colors = {
+            t('priority_high'): '#00CC96',
+            t('priority_medium_high'): '#00B8D4', 
+            t('priority_medium'): '#FFA726',
+            t('priority_low'): '#FF6B6B'
+        }
+        
+        fig_pie = px.pie(
+            values=priority_counts.values,
+            names=priority_counts.index,
+            title=t("dashboard_projects_by_priority"),
+            color=priority_counts.index,
+            color_discrete_map=colors
+        )
+        fig_pie.update_layout(height=350)
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    # Gráfico de ROI vs Score (si hay más de un proyecto)
+    if len(projects) > 1:
+        st.subheader(t("dashboard_viability_vs_roi"))
+        
+        df_scatter = pd.DataFrame([{
+            'Score': p['viability_score'],
+            'ROI (%)': p['roi_first_year'],
+            'Proyecto': p['name'],
+            'Prioridad': p['priority'],
+            'Ahorro Anual': p['annual_savings']
+        } for p in projects])
+        
+        fig_scatter = px.scatter(
+            df_scatter,
+            x='Score',
+            y='ROI (%)',
+            color='Prioridad',
+            size='Ahorro Anual',
+            hover_data=['Proyecto'],
+            title=t("dashboard_viability_roi_relation"),
+            color_discrete_map=colors
+        )
+        fig_scatter.update_layout(height=400)
+        st.plotly_chart(fig_scatter, use_container_width=True)
+    
+    # Análisis de factores (nuevo)
+    st.subheader(t("dashboard_factor_analysis"))
+    
+    col_factors1, col_factors2 = st.columns(2)
+    
+    with col_factors1:
+        # Distribución de complejidad
+        complexity_levels = [p['implementation_complexity'] for p in projects]
+        complexity_counts = pd.Series(complexity_levels).value_counts().sort_index()
+        
+        fig_complexity = px.bar(
+            x=complexity_counts.index,
+            y=complexity_counts.values,
+            title=t("dashboard_complexity_distribution_title"),
+            labels={"x": t("dashboard_complexity_level"), "y": t("dashboard_num_projects")},
+            color=complexity_counts.values,
+            color_continuous_scale='RdYlGn_r'
+        )
+        fig_complexity.update_layout(showlegend=False, height=300)
+        st.plotly_chart(fig_complexity, use_container_width=True)
+    
+    with col_factors2:
+        # Distribución de riesgo
+        risk_levels = [p['risk_level'] for p in projects]
+        risk_counts = pd.Series(risk_levels).value_counts().sort_index()
+        
+        fig_risk = px.bar(
+            x=risk_counts.index,
+            y=risk_counts.values,
+            title=t("dashboard_technical_risk_distribution_title"),
+            labels={"x": t("dashboard_risk_level"), "y": t("dashboard_num_projects")},
+            color=risk_counts.values,
+            color_continuous_scale='RdYlGn_r'
+        )
+        fig_risk.update_layout(showlegend=False, height=300)
+        st.plotly_chart(fig_risk, use_container_width=True)
+    
+    # Tabla detallada de proyectos
+    st.subheader(t('all_projects'))
+    
+    # Preparar datos para la tabla
+    df_display = pd.DataFrame([{
+        'ID': p['id'],
+        t('project_name_col'): p['name'],
+        t('priority'): p['priority'],
+        t('score_col'): f"{p['viability_score']}/100",
+        'ROI %': f"{p['roi_first_year']:.1f}%",
+        t('annual_savings_col'): f"${p['annual_savings']:,.0f}",
+        'Complejidad': f"{p['implementation_complexity']}/5",
+        'Riesgo': f"{p['risk_level']}/5",
+        t('status_col'): t('status_implemented') if p['status'] == 'implemented' else t('status_planning')
+    } for p in projects])
+    
+    # Configurar colores para la tabla basados en prioridad
+    def highlight_priority(row):
+        priority = row[t('priority')]
+        if priority == t('priority_high'):
+            return ['background-color: #E8F5E8'] * len(row)
+        elif priority == t('priority_medium_high'):
+            return ['background-color: #E3F2FD'] * len(row)
+        elif priority == t('priority_medium'):
+            return ['background-color: #FFF3E0'] * len(row)
+        elif priority == t('priority_low'):
+            return ['background-color: #FFEBEE'] * len(row)
+        else:
+            return [''] * len(row)
+    
+    styled_df = df_display.style.apply(highlight_priority, axis=1)
+    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    
+    # Métricas de seguimiento si existen
+    trackings = st.session_state.excel_manager.tracking_df
+    
+    if len(trackings) > 0:
+        st.subheader(t("dashboard_tracking_metrics"))
+        
+        col_track1, col_track2, col_track3, col_track4 = st.columns(4)
+        
+        # Calcular métricas de seguimiento
+        avg_performance = trackings['performance_score'].mean()
+        avg_efficiency = trackings['efficiency_ratio'].mean()
+        avg_adoption = trackings['adoption_rate'].mean()
+        avg_satisfaction = trackings['user_satisfaction_score'].mean()
+        
+        with col_track1:
+            st.metric(t("dashboard_avg_performance"), f"{avg_performance:.0f}/100")
+        with col_track2:
+            st.metric(t("dashboard_avg_efficiency"), f"{avg_efficiency:.2f}x")
+        with col_track3:
+            st.metric(t("dashboard_avg_adoption"), f"{avg_adoption:.0f}%")
+        with col_track4:
+            st.metric(t("dashboard_avg_satisfaction"), f"{avg_satisfaction:.1f}/10")
+        
+        # Gráfico de performance vs score inicial
+        if len(trackings) > 1:
+            tracking_projects = []
+            for _, tracking in trackings.iterrows():
+                project = st.session_state.excel_manager.get_project(tracking['project_id'])
+                if project:
+                    tracking_projects.append({
+                        'Proyecto': project['name'],
+                        'Score Inicial': project['viability_score'],
+                        'Performance Real': tracking['performance_score'],
+                        'Eficiencia': tracking['efficiency_ratio']
+                    })
+            
+            if tracking_projects:
+                df_tracking = pd.DataFrame(tracking_projects)
+                
+                fig_performance = px.scatter(
+                    df_tracking,
+                    x='Score Inicial',
+                    y='Performance Real',
+                    size='Eficiencia',
+                    hover_data=['Proyecto'],
+                    title=t("dashboard_initial_vs_real_performance"),
+                    labels={"Score Inicial": t("dashboard_initial_viability_score"), "Performance Real": t("dashboard_real_performance_percent")}
+                )
+                
+                # Línea de referencia (performance = score inicial)
+                fig_performance.add_shape(
+                    type="line",
+                    x0=0, y0=0, x1=100, y1=100,
+                    line=dict(color="red", width=2, dash="dash"),
+                    name="Línea de Referencia"
+                )
+                
+                fig_performance.update_layout(height=400)
+                st.plotly_chart(fig_performance, use_container_width=True)
+                
+                st.caption(t("dashboard_scatter_caption"))
+    
+    # Insights y recomendaciones
+    st.subheader(t("dashboard_portfolio_insights"))
+    
+    insights = []
+    
+    # Análisis de scores
+    high_score_projects = len([p for p in projects if p['viability_score'] >= 80])
+    if high_score_projects / total_projects > 0.5:
+        insights.append(t("dashboard_insight_portfolio_solid"))
+    
+    # Análisis de complejidad
+    high_complexity = len([p for p in projects if p['implementation_complexity'] >= 4])
+    if high_complexity / total_projects > 0.3:
+        insights.append(t("dashboard_insight_high_complexity"))
+    
+    # Análisis de ROI
+    high_roi_projects = len([p for p in projects if p['roi_first_year'] >= 100])
+    if high_roi_projects > 0:
+        insights.append(f"💰 **Excelente ROI**: {high_roi_projects} proyecto(s) con ROI superior al 100%")
+    
+    # Análisis de seguimiento
+    if len(trackings) > 0:
+        successful_implementations = len([t for _, t in trackings.iterrows() if t['performance_score'] >= 80])
+        if successful_implementations / len(trackings) > 0.7:
+            insights.append(t("dashboard_insight_implementation_success"))
+    
+    # Mostrar insights
+    if insights:
+        for insight in insights:
+            st.info(insight)
+    else:
+        st.info(t("dashboard_add_more_for_insights"))
+    
+    # Exportar datos
+    if st.button(t("dashboard_export_excel_btn")):
+        # Crear buffer para Excel
+        buffer = st.session_state.excel_manager.upload_to_sharepoint_manual()
+        
+        st.download_button(
+            label="📊 Descargar Datos Completos",
+            data=buffer,
+            file_name=f"dashboard_viability_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )

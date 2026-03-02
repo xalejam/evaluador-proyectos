@@ -1,0 +1,1119 @@
+﻿
+"""Seguimiento Operativo v2 (notas inmutables por proyecto).
+
+Este modulo usa SQLite en `project_viability.db` y puede ejecutarse de forma
+independiente con:
+
+    streamlit run seguimiento_operativo.py
+"""
+
+from __future__ import annotations
+
+import sqlite3
+import uuid
+from dataclasses import dataclass
+from datetime import date
+from typing import Any
+
+import pandas as pd
+import streamlit as st
+from infra.db.connection import get_sqlite_conn as get_conn
+from infra.db.migrations import ensure_schema
+from ui.tabs.shared import t
+from ui.i18n_labels import label_note_type, label_status
+
+# Configuracion (editable)
+DB_PATH = "project_viability.db"
+ONGOING_STATUSES = ("evaluated", "approved", "in_agenda", "backlog", "on_hold", "rejected", "executing", "implemented", "handed_off")
+CAPTURE_DEFAULT_STATUSES = ("approved", "in_agenda", "executing")
+NOTE_TYPES = ("general", "proximo_paso", "bloqueador", "riesgo")
+ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder", "other")
+TECH_STACK_OPTIONS = ("python", "vba", "powerbi", "other")
+START_EXECUTION_STATUSES = ("evaluated", "approved", "in_agenda")
+END_MARKER = "/end"
+
+def _note_type_help() -> dict[str, str]:
+    return {
+        "general": t("ops_note_help_general"),
+        "proximo_paso": t("ops_note_help_next_step"),
+        "bloqueador": t("ops_note_help_blocker"),
+        "riesgo": t("ops_note_help_risk"),
+    }
+
+
+def _note_type_example() -> dict[str, str]:
+    return {
+        "general": t("ops_note_example_general"),
+        "proximo_paso": t("ops_note_example_next_step"),
+        "bloqueador": t("ops_note_example_blocker"),
+        "riesgo": t("ops_note_example_risk"),
+    }
+
+
+@dataclass(frozen=True)
+class Project:
+    project_id: str
+    name: str
+    status: str
+    owner: str
+    country: str
+    created_at: str
+    updated_at: str
+    loop_url: str
+    repo_url: str
+    artifacts_url: str
+    artifacts_type: str
+    tech_stack: str
+
+
+def _connect(path: str = DB_PATH) -> sqlite3.Connection:
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+    if not _table_exists(conn, table_name):
+        return set()
+    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return {row["name"] for row in rows}
+
+
+def _project_id_column(conn: sqlite3.Connection) -> str:
+    cols = _table_columns(conn, "projects")
+    return "project_id" if "project_id" in cols else "id"
+
+
+def _project_time_columns(conn: sqlite3.Connection) -> tuple[str, str]:
+    cols = _table_columns(conn, "projects")
+    created_col = "created_at" if "created_at" in cols else "created_date"
+    updated_col = "updated_at" if "updated_at" in cols else created_col
+    return created_col, updated_col
+
+
+def migrate_schema(conn: sqlite3.Connection) -> None:
+    """Aplica migraciones idempotentes."""
+    if _table_exists(conn, "projects"):
+        project_cols = _table_columns(conn, "projects")
+        if "loop_url" not in project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN loop_url TEXT")
+        if "repo_url" not in project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN repo_url TEXT")
+        if "artifacts_url" not in project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN artifacts_url TEXT")
+        if "artifacts_type" not in project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN artifacts_type TEXT")
+        if "tech_stack" not in project_cols:
+            conn.execute("ALTER TABLE projects ADD COLUMN tech_stack TEXT")
+
+    if _table_exists(conn, "project_notes"):
+        notes_cols = _table_columns(conn, "project_notes")
+        if "entry_group_id" not in notes_cols:
+            conn.execute("ALTER TABLE project_notes ADD COLUMN entry_group_id TEXT")
+        if "note_title" not in notes_cols:
+            conn.execute("ALTER TABLE project_notes ADD COLUMN note_title TEXT")
+
+
+def _create_views(conn: sqlite3.Connection) -> None:
+    """Crea vistas para ultima nota global y ultima nota por tipo."""
+    conn.execute("DROP VIEW IF EXISTS v_project_latest_notes")
+    conn.execute("DROP VIEW IF EXISTS v_project_last_note")
+
+    try:
+        conn.execute(
+            """
+            CREATE VIEW v_project_latest_notes AS
+            SELECT
+                note_id, project_id, note_type, note_text, note_title, author, tags,
+                is_private, created_at, entry_group_id
+            FROM (
+                SELECT
+                    pn.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pn.project_id, pn.note_type
+                        ORDER BY datetime(pn.created_at) DESC, pn.note_id DESC
+                    ) AS rn
+                FROM project_notes pn
+            )
+            WHERE rn = 1
+            """
+        )
+        conn.execute(
+            """
+            CREATE VIEW v_project_last_note AS
+            SELECT
+                note_id, project_id, note_type, note_text, note_title, author, tags,
+                is_private, created_at, entry_group_id
+            FROM (
+                SELECT
+                    pn.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pn.project_id
+                        ORDER BY datetime(pn.created_at) DESC, pn.note_id DESC
+                    ) AS rn
+                FROM project_notes pn
+            )
+            WHERE rn = 1
+            """
+        )
+    except sqlite3.OperationalError:
+        conn.execute(
+            """
+            CREATE VIEW v_project_latest_notes AS
+            SELECT
+                pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
+                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id
+            FROM project_notes pn
+            JOIN (
+                SELECT project_id, note_type, MAX(datetime(created_at)) AS max_created_at
+                FROM project_notes
+                GROUP BY project_id, note_type
+            ) mx
+              ON mx.project_id = pn.project_id
+             AND mx.note_type = pn.note_type
+             AND datetime(mx.max_created_at) = datetime(pn.created_at)
+            WHERE pn.note_id = (
+                SELECT MAX(p2.note_id)
+                FROM project_notes p2
+                WHERE p2.project_id = pn.project_id
+                  AND p2.note_type = pn.note_type
+                  AND datetime(p2.created_at) = datetime(pn.created_at)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE VIEW v_project_last_note AS
+            SELECT
+                pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
+                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id
+            FROM project_notes pn
+            JOIN (
+                SELECT project_id, MAX(datetime(created_at)) AS max_created_at
+                FROM project_notes
+                GROUP BY project_id
+            ) mx
+              ON mx.project_id = pn.project_id
+             AND datetime(mx.max_created_at) = datetime(pn.created_at)
+            WHERE pn.note_id = (
+                SELECT MAX(p2.note_id)
+                FROM project_notes p2
+                WHERE p2.project_id = pn.project_id
+                  AND datetime(p2.created_at) = datetime(pn.created_at)
+            )
+            """
+        )
+
+
+def ensure_schema(conn: sqlite3.Connection) -> None:
+    """Crea esquema base y aplica migraciones/vistas."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_notes (
+            note_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            note_text TEXT NOT NULL,
+            note_type TEXT NOT NULL,
+            author TEXT NOT NULL,
+            tags TEXT,
+            is_private INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            entry_group_id TEXT,
+            note_title TEXT
+        )
+        """
+    )
+    migrate_schema(conn)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_notes_pid_date ON project_notes(project_id, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_project_notes_pid_type_date ON project_notes(project_id, note_type, created_at DESC)"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_notes_type ON project_notes(note_type)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_notes_tags ON project_notes(tags)")
+    _create_views(conn)
+    conn.commit()
+
+
+def fetch_projects(conn: sqlite3.Connection, eligible_statuses: tuple[str, ...]) -> list[Project]:
+    """Lee proyectos desde `projects` filtrando por status."""
+    if not eligible_statuses or not _table_exists(conn, "projects"):
+        return []
+
+    cols = _table_columns(conn, "projects")
+    id_col = _project_id_column(conn)
+    created_col, updated_col = _project_time_columns(conn)
+    owner_expr = "owner" if "owner" in cols else "''"
+    country_expr = "country" if "country" in cols else "''"
+    status_expr = "status" if "status" in cols else "''"
+    loop_expr = "loop_url" if "loop_url" in cols else "''"
+    repo_expr = "repo_url" if "repo_url" in cols else "''"
+    artifacts_expr = "artifacts_url" if "artifacts_url" in cols else "''"
+    artifacts_type_expr = "artifacts_type" if "artifacts_type" in cols else "''"
+    tech_stack_expr = "tech_stack" if "tech_stack" in cols else "''"
+
+    placeholders = ",".join(["?"] * len(eligible_statuses))
+    query = f"""
+        SELECT
+            {id_col} AS project_id,
+            COALESCE(name, '') AS name,
+            COALESCE({status_expr}, '') AS status,
+            COALESCE({owner_expr}, '') AS owner,
+            COALESCE({country_expr}, '') AS country,
+            COALESCE({created_col}, '') AS created_at,
+            COALESCE({updated_col}, '') AS updated_at,
+            COALESCE({loop_expr}, '') AS loop_url,
+            COALESCE({repo_expr}, '') AS repo_url,
+            COALESCE({artifacts_expr}, '') AS artifacts_url,
+            COALESCE({artifacts_type_expr}, '') AS artifacts_type,
+            COALESCE({tech_stack_expr}, '') AS tech_stack
+        FROM projects
+        WHERE status IN ({placeholders})
+        ORDER BY COALESCE({updated_col}, '') DESC, COALESCE({created_col}, '') DESC
+    """
+    rows = conn.execute(query, tuple(eligible_statuses)).fetchall()
+    return [
+        Project(
+            project_id=row["project_id"],
+            name=row["name"],
+            status=row["status"],
+            owner=row["owner"],
+            country=row["country"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+            loop_url=row["loop_url"],
+            repo_url=row["repo_url"],
+            artifacts_url=row["artifacts_url"],
+            artifacts_type=row["artifacts_type"],
+            tech_stack=row["tech_stack"],
+        )
+        for row in rows
+    ]
+
+
+def upsert_project_loop_url(conn: sqlite3.Connection, project_id: str, loop_url: str) -> None:
+    """Actualiza loop_url en projects para un proyecto."""
+    cols = _table_columns(conn, "projects")
+    if "loop_url" not in cols:
+        conn.execute("ALTER TABLE projects ADD COLUMN loop_url TEXT")
+    conn.execute(
+        "UPDATE projects SET loop_url = ? WHERE id = ? OR project_id = ?",
+        (loop_url.strip(), project_id.strip(), project_id.strip()),
+    )
+    conn.commit()
+
+
+def upsert_project_links(
+    conn: sqlite3.Connection,
+    project_id: str,
+    *,
+    loop_url: str | None = None,
+    repo_url: str | None = None,
+    artifacts_url: str | None = None,
+    artifacts_type: str | None = None,
+    tech_stack: str | None = None,
+) -> None:
+    cols = _table_columns(conn, "projects")
+    updates: list[str] = []
+    params: list[Any] = []
+    mapping = {
+        "loop_url": loop_url,
+        "repo_url": repo_url,
+        "artifacts_url": artifacts_url,
+        "artifacts_type": artifacts_type,
+        "tech_stack": tech_stack,
+    }
+    for col, value in mapping.items():
+        if col in cols and value is not None:
+            updates.append(f"{col} = ?")
+            params.append(str(value).strip())
+    if not updates:
+        return
+    params.extend([project_id.strip(), project_id.strip()])
+    conn.execute(
+        f"UPDATE projects SET {', '.join(updates)} WHERE id = ? OR project_id = ?",
+        params,
+    )
+    conn.commit()
+
+
+def _artifacts_type_label(code: str) -> str:
+    return t(f"artifacts_type_{code}")
+
+
+def _tech_stack_label(code: str) -> str:
+    return t(f"tech_stack_{code}")
+
+
+def update_project_status(conn: sqlite3.Connection, project_id: str, status: str) -> None:
+    conn.execute(
+        "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ? OR project_id = ?",
+        (status.strip(), project_id.strip(), project_id.strip()),
+    )
+    conn.commit()
+
+def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) -> list[int]:
+    """Inserta lote de notas inmutables. Retorna note_ids insertados."""
+    cleaned: list[tuple[Any, ...]] = []
+    for note in notes:
+        note_type = str(note.get("note_type", "")).strip()
+        note_text = str(note.get("note_text", "")).strip()
+        author = str(note.get("author", "")).strip()
+        if note_type not in NOTE_TYPES or not note_text or not author:
+            continue
+        cleaned.append(
+            (
+                str(note.get("project_id", "")).strip(),
+                note_text,
+                note_type,
+                author,
+                str(note.get("tags", "")).strip(),
+                1 if bool(note.get("is_private", False)) else 0,
+                str(note.get("entry_group_id", "")).strip(),
+                str(note.get("note_title", "")).strip(),
+            )
+        )
+
+    if not cleaned:
+        return []
+
+    conn.executemany(
+        """
+        INSERT INTO project_notes
+            (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        cleaned,
+    )
+    row = conn.execute("SELECT last_insert_rowid() AS last_id").fetchone()
+    conn.commit()
+
+    last_id = int(row["last_id"]) if row else 0
+    first_id = max(1, last_id - len(cleaned) + 1)
+    return list(range(first_id, last_id + 1))
+
+
+def get_latest_notes_by_type(conn: sqlite3.Connection, project_id: str) -> dict[str, dict[str, Any] | None]:
+    """Obtiene la ultima nota por tipo para un proyecto."""
+    rows = conn.execute(
+        """
+        SELECT note_type, note_text, note_title, author, tags, created_at
+        FROM v_project_latest_notes
+        WHERE project_id = ?
+        """,
+        (project_id,),
+    ).fetchall()
+    by_type = {t: None for t in NOTE_TYPES}
+    for row in rows:
+        by_type[row["note_type"]] = dict(row)
+    return by_type
+
+
+def query_notes(
+    conn: sqlite3.Connection,
+    *,
+    project_id: str | None = None,
+    text_query: str | None = None,
+    tag_contains: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    note_type: str | None = None,
+    limit: int = 200,
+) -> pd.DataFrame:
+    """Consulta notas con filtros opcionales combinables."""
+    sql = """
+        SELECT note_id, project_id, note_type, note_title, author, tags, is_private, note_text, created_at, entry_group_id
+        FROM project_notes
+        WHERE 1=1
+    """
+    params: list[Any] = []
+
+    if project_id:
+        sql += " AND project_id = ?"
+        params.append(project_id.strip())
+    if text_query:
+        sql += " AND (note_text LIKE ? OR note_title LIKE ?)"
+        pattern = f"%{text_query.strip()}%"
+        params.extend([pattern, pattern])
+    if tag_contains:
+        sql += " AND tags LIKE ?"
+        params.append(f"%{tag_contains.strip()}%")
+    if note_type and note_type in NOTE_TYPES:
+        sql += " AND note_type = ?"
+        params.append(note_type)
+    if date_from:
+        sql += " AND date(created_at) >= date(?)"
+        params.append(date_from.isoformat())
+    if date_to:
+        sql += " AND date(created_at) <= date(?)"
+        params.append(date_to.isoformat())
+
+    sql += " ORDER BY datetime(created_at) DESC, note_id DESC LIMIT ?"
+    params.append(int(limit))
+
+    return pd.read_sql_query(sql, conn, params=params)
+
+
+def _parse_tags(raw: str) -> list[str]:
+    parts = [item.strip() for item in raw.split(",")]
+    return [p for p in parts if p]
+
+
+def _merge_tags(selected_tags: list[str], csv_tags: str) -> str:
+    merged: list[str] = []
+    for tag in selected_tags + _parse_tags(csv_tags):
+        if tag not in merged:
+            merged.append(tag)
+    return ",".join(merged)
+
+
+def _get_recent_tags(conn: sqlite3.Connection, limit_rows: int = 300, max_tags: int = 40) -> list[str]:
+    rows = conn.execute(
+        "SELECT tags FROM project_notes WHERE COALESCE(tags,'') <> '' ORDER BY datetime(created_at) DESC LIMIT ?",
+        (int(limit_rows),),
+    ).fetchall()
+    tags: list[str] = []
+    for row in rows:
+        for tag in _parse_tags(str(row["tags"])):
+            if tag not in tags:
+                tags.append(tag)
+            if len(tags) >= max_tags:
+                return tags
+    return tags
+
+
+def _latest_project_note(conn: sqlite3.Connection, project_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        """
+        SELECT note_id, note_type, note_title, note_text, author, tags, created_at
+        FROM v_project_last_note
+        WHERE project_id = ?
+        LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def _days_since(dt_str: str | None) -> int | None:
+    if not dt_str:
+        return None
+    try:
+        dt = pd.to_datetime(dt_str, errors="coerce")
+        if pd.isna(dt):
+            return None
+        return max(0, (date.today() - dt.date()).days)
+    except Exception:
+        return None
+
+
+def get_executive_summary_df(
+    conn: sqlite3.Connection,
+    *,
+    statuses: list[str] | None = None,
+    search_query: str | None = None,
+    min_days_without_update: int = 0,
+) -> pd.DataFrame:
+    """Resumen ejecutivo (1 fila por proyecto)."""
+    if not _table_exists(conn, "projects"):
+        return pd.DataFrame()
+
+    if statuses is None or len(statuses) == 0:
+        statuses = list(ONGOING_STATUSES)
+
+    id_col = _project_id_column(conn)
+    cols = _table_columns(conn, "projects")
+    status_expr = "status" if "status" in cols else "''"
+    loop_expr = "loop_url" if "loop_url" in cols else "''"
+    repo_expr = "repo_url" if "repo_url" in cols else "''"
+    artifacts_expr = "artifacts_url" if "artifacts_url" in cols else "''"
+
+    placeholders = ",".join(["?"] * len(statuses))
+    sql = f"""
+        SELECT
+            p.{id_col} AS project_id,
+            COALESCE(p.name, '') AS project_name,
+            COALESCE(p.{status_expr}, '') AS status,
+            COALESCE(p.{loop_expr}, '') AS loop_url,
+            COALESCE(p.{repo_expr}, '') AS repo_url,
+            COALESCE(p.{artifacts_expr}, '') AS artifacts_url,
+            COALESCE(gg.note_text, ln.note_text, '') AS last_note,
+            ln.created_at AS last_note_at,
+            pp.note_text AS last_proximo_paso,
+            bb.note_text AS last_bloqueador,
+            rr.note_text AS last_riesgo
+        FROM projects p
+        LEFT JOIN v_project_last_note ln
+            ON ln.project_id = p.{id_col}
+        LEFT JOIN v_project_latest_notes gg
+            ON gg.project_id = p.{id_col} AND gg.note_type = 'general'
+        LEFT JOIN v_project_latest_notes pp
+            ON pp.project_id = p.{id_col} AND pp.note_type = 'proximo_paso'
+        LEFT JOIN v_project_latest_notes bb
+            ON bb.project_id = p.{id_col} AND bb.note_type = 'bloqueador'
+        LEFT JOIN v_project_latest_notes rr
+            ON rr.project_id = p.{id_col} AND rr.note_type = 'riesgo'
+        WHERE p.{status_expr} IN ({placeholders})
+        ORDER BY COALESCE(ln.created_at, '') DESC, p.{id_col}
+    """
+    df = pd.read_sql_query(sql, conn, params=statuses)
+    if df.empty:
+        return pd.DataFrame(
+            columns=[
+                "Project",
+                "Status",
+                "Days since last",
+                "Last note",
+                "Last proximo_paso",
+                "Last bloqueador",
+                "Last riesgo",
+                "Loop link",
+                "Repo link",
+                "Artifacts link",
+                "Project ID",
+            ]
+        )
+
+    df["Days since last"] = df["last_note_at"].apply(_days_since)
+    df["Days since last"] = df["Days since last"].fillna(99999).astype(int)
+
+    if search_query:
+        q = search_query.strip().lower()
+        if q:
+            mask = (
+                df["project_id"].astype(str).str.lower().str.contains(q, na=False)
+                | df["project_name"].astype(str).str.lower().str.contains(q, na=False)
+                | df["last_note"].astype(str).str.lower().str.contains(q, na=False)
+                | df["last_proximo_paso"].astype(str).str.lower().str.contains(q, na=False)
+                | df["last_bloqueador"].astype(str).str.lower().str.contains(q, na=False)
+                | df["last_riesgo"].astype(str).str.lower().str.contains(q, na=False)
+            )
+            df = df[mask]
+
+    df = df[df["Days since last"] >= int(min_days_without_update)]
+
+    out = pd.DataFrame(
+        {
+            "Project": df["project_name"],
+            "Status": df["status"].apply(lambda v: label_status(str(v))),
+            "Days since last": df["Days since last"],
+            "Last note": df["last_note"].fillna(""),
+            "Last proximo_paso": df["last_proximo_paso"].fillna(""),
+            "Last bloqueador": df["last_bloqueador"].fillna(""),
+            "Last riesgo": df["last_riesgo"].fillna(""),
+            "Loop link": df["loop_url"].fillna(""),
+            "Repo link": df["repo_url"].fillna(""),
+            "Artifacts link": df["artifacts_url"].fillna(""),
+            "Project ID": df["project_id"],
+        }
+    )
+    out = out.sort_values(["Days since last", "Project"], ascending=[False, True]).reset_index(drop=True)
+    return out
+
+def _export_buttons(df: pd.DataFrame, prefix: str, label_suffix: str) -> None:
+    if df.empty:
+        return
+    csv_bytes = df.to_csv(index=False).encode("utf-8")
+    json_bytes = df.to_json(orient="records", force_ascii=False, indent=2).encode("utf-8")
+    col_csv, col_json = st.columns(2)
+    with col_csv:
+        st.download_button(
+            label=f"{t('download_csv')} ({label_suffix})",
+            data=csv_bytes,
+            file_name=f"{prefix}.csv",
+            mime="text/csv",
+            key=f"dl_csv_{prefix}",
+        )
+    with col_json:
+        st.download_button(
+            label=f"{t('download_json')} ({label_suffix})",
+            data=json_bytes,
+            file_name=f"{prefix}.json",
+            mime="application/json",
+            key=f"dl_json_{prefix}",
+        )
+
+
+def seed_demo_data(conn: sqlite3.Connection) -> None:
+    """Carga datos demo manteniendo compatibilidad con esquema existente."""
+    try:
+        if not _table_exists(conn, "projects"):
+            st.warning(t("ops_projects_table_missing"))
+            return
+
+        cols = _table_columns(conn, "projects")
+        id_col = _project_id_column(conn)
+        created_col, updated_col = _project_time_columns(conn)
+
+        count = conn.execute("SELECT COUNT(*) AS n FROM projects").fetchone()["n"]
+        if count == 0 and {"name", "status"}.issubset(cols):
+            base_row: dict[str, Any] = {
+                id_col: "MX-XIOMY-0001",
+                "name": "Demo Operativo 1",
+                "status": "planning",
+            }
+            if "owner" in cols:
+                base_row["owner"] = "XIOMY"
+            if "country" in cols:
+                base_row["country"] = "MX"
+            if created_col in cols:
+                base_row[created_col] = "2026-01-01T10:00:00"
+            if updated_col in cols:
+                base_row[updated_col] = "2026-01-01T10:00:00"
+            if "loop_url" in cols:
+                base_row["loop_url"] = "https://loop.microsoft.com"
+
+            cols_sql = ", ".join(base_row.keys())
+            vals_sql = ", ".join(["?"] * len(base_row))
+            conn.execute(
+                f"INSERT INTO projects ({cols_sql}) VALUES ({vals_sql})",
+                tuple(base_row.values()),
+            )
+
+            base_row2 = dict(base_row)
+            base_row2[id_col] = "MX-XIOMY-0002"
+            base_row2["name"] = "Demo Operativo 2"
+            base_row2["status"] = "implemented"
+            conn.execute(
+                f"INSERT INTO projects ({cols_sql}) VALUES ({vals_sql})",
+                tuple(base_row2.values()),
+            )
+
+        n_notes = conn.execute("SELECT COUNT(*) AS n FROM project_notes").fetchone()["n"]
+        if n_notes == 0:
+            conn.execute(
+                """
+                INSERT INTO project_notes
+                    (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title)
+                VALUES
+                    ('MX-XIOMY-0001', 'Se valido backlog con Comercial y TI.', 'general', 'Xiomy', 'comercial,ti', 0, 'seedgrp1', 'Kickoff'),
+                    ('MX-XIOMY-0001', 'Enviar briefing a TI - Responsable: Xiomy - Fecha: 2026-03-03.', 'proximo_paso', 'Xiomy', 'accion,ti', 0, 'seedgrp1', 'Kickoff'),
+                    ('MX-XIOMY-0002', 'Riesgo de cambio de owner en area comercial.', 'riesgo', 'Xiomy', 'riesgo,owner', 0, 'seedgrp2', 'Riesgos iniciales')
+                """
+            )
+        conn.commit()
+        st.success(t("ops_demo_loaded"))
+    except Exception as exc:
+        st.error(f"{t('ops_demo_load_error')}: {exc}")
+
+
+def _render_last_notes_cards(conn: sqlite3.Connection, project_id: str) -> None:
+    st.subheader(t("ops_last_notes_title"))
+    latest_by_type = get_latest_notes_by_type(conn, project_id)
+    cols = st.columns(4)
+    for idx, note_type in enumerate(NOTE_TYPES):
+        data = latest_by_type.get(note_type)
+        with cols[idx]:
+            st.markdown(f"**{label_note_type(note_type)}**")
+            if not data:
+                st.caption(t("ops_no_note"))
+                continue
+            title_txt = f"{data.get('note_title', '').strip()} - " if data.get("note_title") else ""
+            st.caption(f"{title_txt}{data.get('created_at', '')} - {data.get('author', t('na'))}")
+            st.write(data.get("note_text", ""))
+            if data.get("tags"):
+                st.caption(f"{t('ops_tags_label')}: {data['tags']}")
+
+
+def _render_capture_tab(conn: sqlite3.Connection) -> None:
+    st.subheader(t("ops_quick_capture"))
+    st.info(t("ops_capture_help_info"))
+
+    selected_statuses = st.multiselect(
+        t("ops_included_statuses"),
+        options=list(ONGOING_STATUSES),
+        format_func=label_status,
+        default=list(CAPTURE_DEFAULT_STATUSES),
+        key="ops_capture_statuses",
+    )
+    effective_statuses = tuple(selected_statuses) if selected_statuses else ONGOING_STATUSES
+    projects = fetch_projects(conn, effective_statuses)
+    if not projects:
+        st.warning(t("ops_no_eligible_projects"))
+        return
+
+    options = {f"{p.project_id} - {p.name} ({label_status(p.status)})": p for p in projects}
+    selected_label = st.selectbox(t("project_label"), list(options.keys()), key="ops_v2_project_select")
+    selected_project = options[selected_label]
+
+    latest_note = _latest_project_note(conn, selected_project.project_id)
+    last_update_text = latest_note["created_at"] if latest_note else t("ops_no_notes")
+    has_saved_loop_url = bool((selected_project.loop_url or "").strip())
+    is_first_entry = latest_note is None
+
+    info1, info2, info3 = st.columns([1, 1, 2])
+    with info1:
+        st.caption(t("status"))
+        st.write(label_status(selected_project.status) if selected_project.status else t("na"))
+    with info2:
+        st.caption(t("ops_last_update"))
+        st.write(last_update_text)
+    with info3:
+        st.caption(t("loop_label"))
+        if has_saved_loop_url:
+            st.link_button(t("open_loop_btn"), selected_project.loop_url)
+            st.caption(selected_project.loop_url)
+        else:
+            st.write(t("no_link"))
+
+    links_col1, links_col2, links_col3 = st.columns(3)
+    with links_col1:
+        if selected_project.loop_url:
+            st.link_button(t("open_loop_btn"), selected_project.loop_url, use_container_width=True)
+    with links_col2:
+        if selected_project.repo_url:
+            st.link_button(t("open_repo_btn"), selected_project.repo_url, use_container_width=True)
+    with links_col3:
+        if selected_project.artifacts_url:
+            st.link_button(t("open_artifacts_btn"), selected_project.artifacts_url, use_container_width=True)
+
+    if is_first_entry:
+        st.info(t("ops_first_entry_loop_required"))
+    elif not has_saved_loop_url:
+        st.warning(t("ops_loop_missing_warning"))
+
+    links_expand_key = f"ops_links_expanded_{selected_project.project_id}"
+    missing_links = not bool(selected_project.loop_url and selected_project.repo_url and selected_project.artifacts_url)
+    if missing_links and st.button(t("configure_links"), key=f"ops_cfg_links_{selected_project.project_id}"):
+        st.session_state[links_expand_key] = True
+
+    with st.expander(t("project_links_section"), expanded=bool(st.session_state.get(links_expand_key, False))):
+        c_link_1, c_link_2 = st.columns(2)
+        with c_link_1:
+            loop_url_input = st.text_input(
+                t("loop_link"),
+                value=selected_project.loop_url or "",
+                key=f"ops_loop_url_{selected_project.project_id}",
+            )
+            repo_url_input = st.text_input(
+                t("repo_link"),
+                value=selected_project.repo_url or "",
+                help=t("repo_help"),
+                key=f"ops_repo_url_{selected_project.project_id}",
+            )
+            artifacts_url_input = st.text_input(
+                t("artifacts_link"),
+                value=selected_project.artifacts_url or "",
+                help=t("artifacts_help"),
+                key=f"ops_artifacts_url_{selected_project.project_id}",
+            )
+        with c_link_2:
+            artifacts_type_input = st.selectbox(
+                t("artifacts_type"),
+                options=list(ARTIFACT_TYPES),
+                index=(
+                    list(ARTIFACT_TYPES).index(selected_project.artifacts_type)
+                    if selected_project.artifacts_type in ARTIFACT_TYPES
+                    else list(ARTIFACT_TYPES).index("other")
+                ),
+                format_func=_artifacts_type_label,
+                key=f"ops_artifacts_type_{selected_project.project_id}",
+            )
+            tech_stack_input = st.selectbox(
+                t("tech_stack"),
+                options=list(TECH_STACK_OPTIONS),
+                index=(
+                    list(TECH_STACK_OPTIONS).index(selected_project.tech_stack)
+                    if selected_project.tech_stack in TECH_STACK_OPTIONS
+                    else list(TECH_STACK_OPTIONS).index("other")
+                ),
+                format_func=_tech_stack_label,
+                key=f"ops_tech_stack_{selected_project.project_id}",
+            )
+            st.write("")
+            st.write("")
+            if st.button(t("save_links"), key=f"ops_save_links_{selected_project.project_id}", use_container_width=True):
+                try:
+                    upsert_project_links(
+                        conn,
+                        selected_project.project_id,
+                        loop_url=loop_url_input,
+                        repo_url=repo_url_input,
+                        artifacts_url=artifacts_url_input,
+                        artifacts_type=artifacts_type_input,
+                        tech_stack=tech_stack_input,
+                    )
+                    st.success(t("ops_links_updated"))
+                    st.session_state[links_expand_key] = False
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"{t('ops_link_save_error')}: {exc}")
+
+    recent_tags = _get_recent_tags(conn)
+    default_author = str(st.session_state.get("author", st.session_state.get("current_user", "Xiomara Monroy")))
+    note_help = _note_type_help()
+    note_example = _note_type_example()
+
+    with st.form(key=f"ops_capture_form_{selected_project.project_id}", clear_on_submit=False):
+        note_title = st.text_input(t("ops_note_title_optional"))
+        selected_tags = st.multiselect(t("ops_recent_tags"), options=recent_tags)
+        tags_csv = st.text_input(t("ops_extra_tags_csv"), placeholder=t("ops_extra_tags_placeholder"))
+        author = st.text_input(t("ops_author"), value=default_author)
+
+        general = st.text_area(label_note_type("general"), placeholder=note_help["general"], height=120)
+        st.caption(f"{note_help['general']} {note_example['general']}")
+        proximo_paso = st.text_area(label_note_type("proximo_paso"), placeholder=note_help["proximo_paso"], height=120)
+        st.caption(f"{note_help['proximo_paso']} {note_example['proximo_paso']}")
+        bloqueador = st.text_area(label_note_type("bloqueador"), placeholder=note_help["bloqueador"], height=120)
+        st.caption(f"{note_help['bloqueador']} {note_example['bloqueador']}")
+        riesgo = st.text_area(label_note_type("riesgo"), placeholder=note_help["riesgo"], height=120)
+        st.caption(f"{note_help['riesgo']} {note_example['riesgo']}")
+
+        submitted = st.form_submit_button(t("ops_save_update_btn"), type="primary")
+
+    if submitted:
+        if not author.strip():
+            st.error(t("ops_author_required"))
+        elif not loop_url_input.strip():
+            st.error(t("ops_loop_required_to_save"))
+        else:
+            tags_merged = _merge_tags(selected_tags, tags_csv)
+            entry_group_id = uuid.uuid4().hex
+            notes_to_insert = []
+            for ntype, ntext in (
+                ("general", general),
+                ("proximo_paso", proximo_paso),
+                ("bloqueador", bloqueador),
+                ("riesgo", riesgo),
+            ):
+                if str(ntext).strip():
+                    notes_to_insert.append(
+                        {
+                            "project_id": selected_project.project_id,
+                            "note_type": ntype,
+                            "note_text": str(ntext).strip(),
+                            "author": author.strip(),
+                            "tags": tags_merged,
+                            "is_private": False,
+                            "entry_group_id": entry_group_id,
+                            "note_title": note_title.strip(),
+                        }
+                    )
+
+            if not notes_to_insert:
+                st.warning(t("ops_no_content_to_save"))
+            else:
+                try:
+                    if loop_url_input.strip() != (selected_project.loop_url or "").strip():
+                        upsert_project_loop_url(conn, selected_project.project_id, loop_url_input)
+                    inserted_ids = insert_notes_batch(conn, notes_to_insert)
+                    status_after: str | None = None
+                    general_text = str(general or "").lower()
+                    if END_MARKER in general_text:
+                        status_after = "implemented"
+                    elif is_first_entry and str(selected_project.status or "").lower() in START_EXECUTION_STATUSES:
+                        status_after = "executing"
+                    if status_after:
+                        update_project_status(conn, selected_project.project_id, status_after)
+                    st.success(
+                        f"{t('ops_update_saved')} {entry_group_id}. {t('ops_notes_inserted')}: {len(inserted_ids)}"
+                    )
+                    if status_after:
+                        st.info(f"{t('ops_status_changed_to')} {label_status(status_after)}")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"{t('ops_save_update_error')}: {exc}")
+
+    st.markdown("---")
+    _render_last_notes_cards(conn, selected_project.project_id)
+
+def _render_executive_tab(conn: sqlite3.Connection) -> None:
+    st.subheader(t("ops_executive_summary"))
+
+    all_projects = fetch_projects(conn, ONGOING_STATUSES)
+    available_statuses = sorted({p.status for p in all_projects if p.status})
+    default_statuses = available_statuses if available_statuses else list(ONGOING_STATUSES)
+
+    c1, c2, c3 = st.columns([2, 2, 1])
+    with c1:
+        status_filter = st.multiselect(
+            t("ops_states"),
+            options=available_statuses if available_statuses else list(ONGOING_STATUSES),
+            format_func=label_status,
+            default=default_statuses,
+            key="ops_exec_status_filter",
+        )
+    with c2:
+        search_query = st.text_input(t("ops_search"), key="ops_exec_search")
+    with c3:
+        day_threshold = st.number_input(
+            t("ops_days_without_update"),
+            min_value=0,
+            max_value=9999,
+            value=0,
+            step=1,
+            key="ops_exec_days",
+        )
+
+    try:
+        summary_df = get_executive_summary_df(
+            conn,
+            statuses=status_filter if status_filter else list(ONGOING_STATUSES),
+            search_query=search_query or None,
+            min_days_without_update=int(day_threshold),
+        )
+    except Exception as exc:
+        st.error(f"{t('ops_summary_build_error')}: {exc}")
+        return
+
+    if summary_df.empty:
+        st.info(t("ops_no_results_filters"))
+        return
+
+    _export_buttons(summary_df, prefix="resumen_ejecutivo", label_suffix=t("ops_executive_summary"))
+    st.dataframe(
+        summary_df,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "Loop link": st.column_config.LinkColumn(t("loop_label")),
+            "Repo link": st.column_config.LinkColumn(t("repo_link")),
+            "Artifacts link": st.column_config.LinkColumn(t("artifacts_link")),
+        },
+    )
+
+
+def _render_cards(df: pd.DataFrame) -> None:
+    grouped = df.copy()
+    grouped["entry_group_id"] = grouped["entry_group_id"].fillna("").astype(str)
+    grouped["group_key"] = grouped["entry_group_id"].where(grouped["entry_group_id"] != "", grouped["note_id"].astype(str))
+
+    for group_id, chunk in grouped.groupby("group_key", sort=False):
+        first = chunk.iloc[0]
+        with st.container(border=True):
+            st.markdown(
+                f"**{t('ops_update_title')} {group_id} - {first['created_at']} - {first.get('author') or t('na')} - {first['project_id']}**"
+            )
+            if first.get("tags"):
+                st.caption(f"{t('ops_tags_label')}: {first['tags']}")
+            for _, row in chunk.iterrows():
+                title = str(row.get("note_title") or "").strip()
+                title_prefix = f"{title} - " if title else ""
+                st.markdown(f"- **{label_note_type(str(row['note_type']))}** {title_prefix}{row['note_text']}")
+
+
+def _render_timeline_tab(conn: sqlite3.Connection) -> None:
+    st.subheader(t("ops_timeline_history"))
+
+    projects = fetch_projects(conn, ONGOING_STATUSES)
+    options = {f"{p.project_id} - {p.name} ({label_status(p.status)})": p for p in projects}
+    selected_label = st.selectbox(
+        t("ops_project_timeline_select"),
+        list(options.keys()) if options else [],
+        key="ops_timeline_project_select",
+    )
+    selected_project_id = options[selected_label].project_id if selected_label else None
+
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        filter_text = st.text_input(t("ops_search_text"), key="ops_tl_text")
+    with col2:
+        filter_tag = st.text_input(t("ops_filter_tag"), key="ops_tl_tag")
+    with col3:
+        filter_type = st.selectbox(t("ops_type"), options=["todos", *NOTE_TYPES], format_func=lambda x: t("ops_all") if x == "todos" else label_note_type(x), key="ops_tl_type")
+    with col4:
+        limit = st.number_input(t("ops_limit"), min_value=10, max_value=2000, value=200, step=10, key="ops_tl_limit")
+
+    d1, d2 = st.columns(2)
+    with d1:
+        date_from = st.date_input(t("ops_from"), value=None, key="ops_tl_from")
+    with d2:
+        date_to = st.date_input(t("ops_to"), value=None, key="ops_tl_to")
+
+    note_type_filter = None if filter_type == "todos" else filter_type
+
+    if selected_project_id:
+        project_df = query_notes(
+            conn,
+            project_id=selected_project_id,
+            text_query=filter_text or None,
+            tag_contains=filter_tag or None,
+            date_from=date_from if isinstance(date_from, date) else None,
+            date_to=date_to if isinstance(date_to, date) else None,
+            note_type=note_type_filter,
+            limit=int(limit),
+        )
+    else:
+        project_df = pd.DataFrame()
+
+    st.markdown(f"**{t('ops_project_view')}**")
+    if project_df.empty:
+        st.info(t("ops_no_project_notes_filtered"))
+    else:
+        _export_buttons(
+            project_df,
+            prefix=f"timeline_{selected_project_id}",
+            label_suffix=t("ops_project_timeline_label"),
+        )
+        _render_cards(project_df)
+
+    st.markdown("---")
+    st.markdown(f"**{t('ops_global_view')}**")
+    global_df = query_notes(
+        conn,
+        project_id=None,
+        text_query=filter_text or None,
+        tag_contains=filter_tag or None,
+        date_from=date_from if isinstance(date_from, date) else None,
+        date_to=date_to if isinstance(date_to, date) else None,
+        note_type=note_type_filter,
+        limit=int(limit),
+    )
+    if global_df.empty:
+        st.info(t("ops_no_global_notes_filtered"))
+    else:
+        _export_buttons(global_df, prefix="timeline_global", label_suffix=t("ops_global_timeline_label"))
+        _render_cards(global_df)
+
+
+def render_seguimiento_operativo() -> None:
+    """Render principal de la pestana Seguimiento Operativo v2."""
+    st.title(t("operational_log_tab"))
+    st.caption(t("ops_tab_caption"))
+
+    try:
+        with get_conn(DB_PATH) as conn:
+            ensure_schema(conn)
+    except Exception as exc:
+        st.error(f"{t('ops_schema_init_error')}: {exc}")
+        return
+
+    with get_conn(DB_PATH) as conn:
+        if st.checkbox(t("ops_load_demo"), value=False, key="ops_seed_demo_v2"):
+            seed_demo_data(conn)
+            st.rerun()
+
+        tab_a, tab_b, tab_c = st.tabs([t("ops_quick_capture"), t("ops_executive_summary"), t("ops_timeline_history")])
+
+        with tab_a:
+            try:
+                _render_capture_tab(conn)
+            except Exception as exc:
+                st.error(f"{t('ops_error_quick_capture')}: {exc}")
+
+        with tab_b:
+            try:
+                _render_executive_tab(conn)
+            except Exception as exc:
+                st.error(f"{t('ops_error_executive_summary')}: {exc}")
+
+        with tab_c:
+            try:
+                _render_timeline_tab(conn)
+            except Exception as exc:
+                st.error(f"{t('ops_error_timeline')}: {exc}")
+
+
+if __name__ == "__main__":
+    st.set_page_config(page_title="Seguimiento Operativo", page_icon=":pushpin:", layout="wide")
+    render_seguimiento_operativo()
+

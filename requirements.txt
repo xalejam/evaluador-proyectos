@@ -1,0 +1,8 @@
+streamlit
+pandas
+plotly
+openpyxl
+numpy
+SQLAlchemy
+requests
+requests-ntlm

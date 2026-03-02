@@ -1,0 +1,87 @@
+# main.py
+"""
+Archivo principal del Sistema de Evaluacion de Viabilidad - Bilingue
+Une todos los modulos: planificacion, seguimiento, dashboard, feedback y SQL.
+"""
+
+import streamlit as st
+from pathlib import Path
+from ui.tabs.shared import (
+    t, init_excel_manager, render_language_selector,
+    render_sidebar_stats
+)
+from ui.state import init_state
+from ui.tabs.viabilidad_tab import render_viabilidad_tab
+from ui.tabs.post_impl_tab import render_post_impl_tab
+from ui.tabs.dashboard_tab import render_dashboard_tab
+from ui.tabs.feedback_tab import render_feedback_tab
+from ui.tabs.sql_tab import render_sql_tab
+from ui.tabs.use_case_matrix_tab import render_use_case_matrix_tab
+from ui.tabs.seguimiento_operativo_tab import render_seguimiento_operativo_tab
+
+ROOT = Path(__file__).resolve().parent
+
+# Configuracion de Streamlit
+st.set_page_config(
+    page_title="Evaluador de Viabilidad Bilingue",
+    page_icon=":abacus:",
+    layout="wide"
+)
+
+
+def main():
+    """Funcion principal."""
+    # Inicializar sistema
+    init_state()
+    init_excel_manager()
+
+    # Logo arriba a la izquierda (sidebar)
+    logo_path = ROOT / "assets_images" / "logo_DDNola.png"
+    if logo_path.exists():
+        st.sidebar.image(str(logo_path), use_container_width=True)
+
+    # Selector de idioma (siempre arriba en sidebar)
+    render_language_selector()
+
+    # Titulo principal
+    st.title(t("platform_title"))
+    st.markdown(t("platform_subtitle"))
+
+    # Componentes del sidebar
+    render_sidebar_stats()
+
+    # Pestanas principales
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        t("viability_tab"),
+        t("operational_log_tab"),
+        t("impact_kpis_tab"),
+        t("dashboard_tab"),
+        t("use_case_matrix_tab"),
+        t("feedback_tab"),
+        t("sql_tab"),
+    ])
+
+    with tab1:
+        render_viabilidad_tab()
+
+    with tab2:
+        render_seguimiento_operativo_tab()
+
+    with tab3:
+        render_post_impl_tab()
+
+    with tab4:
+        render_dashboard_tab()
+
+    with tab5:
+        render_use_case_matrix_tab()
+
+    with tab6:
+        render_feedback_tab()
+
+    with tab7:
+        render_sql_tab()
+
+
+if __name__ == "__main__":
+    main()

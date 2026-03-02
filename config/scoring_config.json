@@ -1,0 +1,77 @@
+{
+  "id_format": "{country}-{owner}-{sequence}",
+  "n_digits": 4,
+  "thresholds": {
+    "impact": 3.5,
+    "effort": 3.5
+  },
+  "countries": [
+    "MX",
+    "BR",
+    "CO",
+    "AR",
+    "CL",
+    "PE",
+    "US"
+  ],
+  "criteria": [
+    {
+      "code": "A",
+      "dimension": "IMPACT",
+      "label": "Ahorro de tiempo / eficiencia",
+      "help": "Cuanto reduce tiempo operativo."
+    },
+    {
+      "code": "B",
+      "dimension": "IMPACT",
+      "label": "Alcance",
+      "help": "Cuantas areas/equipos impacta."
+    },
+    {
+      "code": "C",
+      "dimension": "IMPACT",
+      "label": "Frecuencia / volumen",
+      "help": "Con que frecuencia o volumen aplica."
+    },
+    {
+      "code": "D",
+      "dimension": "IMPACT",
+      "label": "Valor al negocio",
+      "help": "Contribucion al resultado de negocio."
+    },
+    {
+      "code": "E",
+      "dimension": "EFFORT",
+      "label": "Complejidad tecnica",
+      "help": "Nivel de dificultad de implementacion."
+    },
+    {
+      "code": "F",
+      "dimension": "EFFORT",
+      "label": "Integraciones",
+      "help": "Cantidad/dificultad de integraciones."
+    },
+    {
+      "code": "G",
+      "dimension": "EFFORT",
+      "label": "Dependencias / riesgos",
+      "help": "Dependencias externas y riesgos."
+    },
+    {
+      "code": "H",
+      "dimension": "EFFORT",
+      "label": "Change management",
+      "help": "Esfuerzo de adopcion y gestion del cambio."
+    }
+  ],
+  "default_weights": {
+    "A": 1.0,
+    "B": 1.0,
+    "C": 1.0,
+    "D": 1.0,
+    "E": 1.0,
+    "F": 1.0,
+    "G": 1.0,
+    "H": 1.0
+  }
+}

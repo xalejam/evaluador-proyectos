@@ -1,0 +1,22 @@
+﻿approval_threshold: 80
+allowed_statuses:
+  - evaluated
+  - backlog
+  - on_hold
+  - approved
+  - in_agenda
+  - executing
+  - implemented
+  - rejected
+  - handed_off
+allowed_note_types:
+  - general
+  - proximo_paso
+  - bloqueador
+  - riesgo
+delivery_teams:
+  - NOLA
+  - Brazil
+  - Champions
+  - Other
+project_id_pattern: "{country}-{owner}-{sequence}"

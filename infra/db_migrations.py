@@ -158,6 +158,7 @@ def ensure_evaluations_schema(conn: sqlite3.Connection) -> None:
 def _create_notes_views(conn: sqlite3.Connection) -> None:
     conn.execute("DROP VIEW IF EXISTS v_project_latest_notes")
     conn.execute("DROP VIEW IF EXISTS v_project_last_note")
+    conn.execute("DROP VIEW IF EXISTS v_project_progress_history")
 
     try:
         conn.execute(
@@ -165,7 +166,7 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
-                is_private, created_at, entry_group_id
+                is_private, created_at, entry_group_id, progress_percent, estimated_end_date
             FROM (
                 SELECT
                     pn.*,
@@ -183,7 +184,7 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_last_note AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
-                is_private, created_at, entry_group_id
+                is_private, created_at, entry_group_id, progress_percent, estimated_end_date
             FROM (
                 SELECT
                     pn.*,
@@ -202,7 +203,8 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
-                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id
+                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id,
+                pn.progress_percent, pn.estimated_end_date
             FROM project_notes pn
             JOIN (
                 SELECT project_id, note_type, MAX(datetime(created_at)) AS max_created_at
@@ -226,7 +228,8 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_last_note AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
-                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id
+                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id,
+                pn.progress_percent, pn.estimated_end_date
             FROM project_notes pn
             JOIN (
                 SELECT project_id, MAX(datetime(created_at)) AS max_created_at
@@ -241,6 +244,54 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
                 WHERE p2.project_id = pn.project_id
                   AND datetime(p2.created_at) = datetime(pn.created_at)
             )
+            """
+        )
+
+    try:
+        conn.execute(
+            """
+            CREATE VIEW v_project_progress_history AS
+            SELECT
+                x.project_id,
+                x.note_id,
+                x.entry_group_id,
+                x.author,
+                x.note_type,
+                x.note_title,
+                x.progress_percent,
+                x.estimated_end_date,
+                x.created_at
+            FROM (
+                SELECT
+                    pn.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pn.project_id, COALESCE(NULLIF(pn.entry_group_id, ''), CAST(pn.note_id AS TEXT))
+                        ORDER BY pn.note_id ASC
+                    ) AS rn
+                FROM project_notes pn
+                WHERE pn.progress_percent IS NOT NULL
+            ) x
+            WHERE x.rn = 1
+            ORDER BY x.project_id, datetime(x.created_at) DESC, x.note_id DESC
+            """
+        )
+    except sqlite3.OperationalError:
+        # Compatibilidad con engines viejos de SQLite sin funciones avanzadas.
+        conn.execute(
+            """
+            CREATE VIEW v_project_progress_history AS
+            SELECT
+                pn.project_id,
+                pn.note_id,
+                pn.entry_group_id,
+                pn.author,
+                pn.note_type,
+                pn.note_title,
+                pn.progress_percent,
+                pn.estimated_end_date,
+                pn.created_at
+            FROM project_notes pn
+            WHERE pn.progress_percent IS NOT NULL
             """
         )
 
@@ -259,12 +310,16 @@ def ensure_notes_schema(conn: sqlite3.Connection) -> None:
             is_private INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             entry_group_id TEXT,
-            note_title TEXT
+            note_title TEXT,
+            progress_percent INTEGER,
+            estimated_end_date TEXT
         )
         """
     )
     _add_column_if_missing(conn, "project_notes", "entry_group_id TEXT")
     _add_column_if_missing(conn, "project_notes", "note_title TEXT")
+    _add_column_if_missing(conn, "project_notes", "progress_percent INTEGER")
+    _add_column_if_missing(conn, "project_notes", "estimated_end_date TEXT")
 
     _ensure_index(
         conn,

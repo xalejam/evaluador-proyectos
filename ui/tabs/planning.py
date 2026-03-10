@@ -212,7 +212,7 @@ def insert_project_evaluation_snapshot(
     conn.commit()
 
 
-def save_project(conn, payload: dict, status_after: str, loop_url_optional: str = "", developer_team: str = "") -> tuple:
+def save_project(conn, payload: dict, status_after: str, loop_url_optional: str | None = None, developer_team: str = "") -> tuple:
     """
     Persiste proyecto en projects con create/update y deja estado final.
     Retorna (project_id, calc_results, created_new).
@@ -231,8 +231,8 @@ def save_project(conn, payload: dict, status_after: str, loop_url_optional: str 
     projects_cols = {row["name"] for row in conn.execute("PRAGMA table_info(projects)").fetchall()}
     updates = {"status": status_after, "updated_at": "datetime('now')", "project_id": project_id}
 
-    if "loop_url" in projects_cols:
-        updates["loop_url"] = (loop_url_optional or "").strip()
+    if "loop_url" in projects_cols and loop_url_optional is not None:
+        updates["loop_url"] = loop_url_optional.strip()
     if "developer_team" in projects_cols:
         updates["developer_team"] = (developer_team or "").strip()
 
@@ -322,12 +322,49 @@ def render_planning_tab():
         with mode2:
             if st.button(t("search_edit_btn"), type="secondary"):
                 st.session_state.edit_mode = True
+                st.rerun()
         with mode3:
             if edit_mode and st.button(t("cancel_btn"), type="secondary"):
                 st.session_state.edit_mode = False
                 st.session_state.selected_project_id = None
                 st.session_state.temp_calculation = None
                 st.rerun()
+
+        if edit_mode:
+            all_projects = st.session_state.excel_manager.get_all_projects()
+            if not all_projects:
+                st.warning(t("no_projects_found"))
+            else:
+                project_options = []
+                project_map = {}
+                for project in all_projects:
+                    project_id = str(project.get("id", "")).strip()
+                    if not project_id:
+                        continue
+                    project_name = str(project.get("name", "")).strip() or t("na")
+                    option_label = f"{project_name} ({project_id})"
+                    project_options.append(option_label)
+                    project_map[option_label] = project_id
+
+                if project_options:
+                    current_selected_id = st.session_state.get("selected_project_id")
+                    default_idx = 0
+                    if current_selected_id:
+                        for idx, label in enumerate(project_options):
+                            if label.endswith(f"({current_selected_id})"):
+                                default_idx = idx
+                                break
+
+                    selected_label = st.selectbox(
+                        t("select_project"),
+                        options=project_options,
+                        index=default_idx,
+                        key="planning_edit_project_selector",
+                    )
+                    if st.button(t("edit_btn"), key="planning_load_project_btn"):
+                        st.session_state.selected_project_id = project_map[selected_label]
+                        st.session_state.temp_calculation = None
+                        st.rerun()
 
         st.subheader(t("evaluation_form"))
         project_name = st.text_input(
@@ -459,11 +496,6 @@ def render_planning_tab():
                     else 0
                 ),
             )
-            loop_url_input = st.text_input(
-                t("loop_url_label"),
-                value=(selected_project.get("loop_url") if selected_project else ""),
-                placeholder="https://loop.microsoft.com/...",
-            )
 
         development_hours = locals().get("development_hours", int(selected_project["development_hours"]) if selected_project else 0)
         development_cost_per_hour = locals().get(
@@ -483,7 +515,6 @@ def render_planning_tab():
             t("risk_options")[int(selected_project["risk_level"])] if selected_project else t("risk_options")[1],
         )
         developer_team = locals().get("developer_team", selected_project.get("developer_team", DEVELOPER_TEAMS[0]) if selected_project else DEVELOPER_TEAMS[0])
-        loop_url_input = locals().get("loop_url_input", selected_project.get("loop_url", "") if selected_project else "")
         project_description = locals().get("project_description", selected_project["description"] if selected_project else "")
 
         complexity_value = int(str(implementation_complexity).split(" - ")[0])
@@ -571,9 +602,6 @@ def render_planning_tab():
                     else:
                         status_after = "approved"
                     action = "approved"
-                    if not (loop_url_input or (current_project or {}).get("loop_url", "")).strip():
-                        st.error(t("loop_required_for_approval"))
-                        return
 
                 try:
                     with get_conn() as conn:
@@ -581,7 +609,7 @@ def render_planning_tab():
                             conn=conn,
                             payload=calc_inputs,
                             status_after=status_after,
-                            loop_url_optional=loop_url_input,
+                            loop_url_optional=None,
                             developer_team=developer_team,
                         )
                         insert_project_evaluation_snapshot(
@@ -661,5 +689,3 @@ def render_planning_tab():
             st.metric(t("first_year_roi"), f"{float(project_to_show.get('roi_first_year', 0)):.1f}%")
 
         st.info(f"ðŸ“ {project_to_show.get('recommendation', '')}")
-
-

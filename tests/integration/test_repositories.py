@@ -29,6 +29,8 @@ def test_notes_repo_insert_and_latest(temp_db_path):
                 "note_text": "Inicio de proyecto",
                 "author": "tester",
                 "entry_group_id": "grp1",
+                "progress_percent": 15,
+                "estimated_end_date": "2026-05-30",
             },
             {
                 "project_id": "MX-TEST-0001",
@@ -44,6 +46,10 @@ def test_notes_repo_insert_and_latest(temp_db_path):
     assert "general" in latest
     assert latest["general"]["note_text"] == "Inicio de proyecto"
     assert latest["riesgo"]["note_text"] == "Riesgo de capacidad"
+
+    trend = notes_repo.get_project_progress_trend("MX-TEST-0001")
+    assert not trend.empty
+    assert int(trend.iloc[0]["progress_percent"]) == 15
 
 
 def test_evaluation_repo_insert_and_list(temp_db_path):

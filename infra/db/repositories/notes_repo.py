@@ -19,6 +19,13 @@ class NotesRepository:
         for n in notes:
             if not str(n.get("project_id", "")).strip() or not str(n.get("note_text", "")).strip():
                 continue
+            progress_percent = n.get("progress_percent")
+            if progress_percent in ("", None):
+                progress_percent = None
+            elif not isinstance(progress_percent, int):
+                raise ValueError("progress_percent must be an integer between 0 and 100.")
+            if progress_percent is not None and not (0 <= progress_percent <= 100):
+                raise ValueError("progress_percent must be between 0 and 100.")
             cleaned.append(
                 (
                     str(n.get("project_id", "")).strip(),
@@ -29,6 +36,8 @@ class NotesRepository:
                     1 if bool(n.get("is_private", False)) else 0,
                     str(n.get("entry_group_id", "")).strip(),
                     str(n.get("note_title", "")).strip(),
+                    progress_percent,
+                    str(n.get("estimated_end_date", "")).strip() or None,
                 )
             )
         if not cleaned:
@@ -38,8 +47,11 @@ class NotesRepository:
             conn.executemany(
                 """
                 INSERT INTO project_notes
-                    (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (
+                        project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
+                        progress_percent, estimated_end_date
+                    )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 cleaned,
             )
@@ -61,7 +73,9 @@ class NotesRepository:
         limit: int = 200,
     ) -> pd.DataFrame:
         sql = """
-            SELECT note_id, project_id, note_type, note_title, author, tags, is_private, note_text, created_at, entry_group_id
+            SELECT
+                note_id, project_id, note_type, note_title, author, tags, is_private, note_text, created_at,
+                entry_group_id, progress_percent, estimated_end_date
             FROM project_notes
             WHERE 1=1
         """
@@ -105,3 +119,16 @@ class NotesRepository:
                 (project_id,),
             ).fetchone()
             return dict(row) if row else None
+
+    def get_project_progress_trend(self, project_id: str, *, limit: int = 50) -> pd.DataFrame:
+        sql = """
+            SELECT
+                project_id, note_id, entry_group_id, author, note_type, note_title,
+                progress_percent, estimated_end_date, created_at
+            FROM v_project_progress_history
+            WHERE project_id = ?
+            ORDER BY datetime(created_at) DESC, note_id DESC
+            LIMIT ?
+        """
+        with get_sqlite_conn(self.db_path) as conn:
+            return pd.read_sql_query(sql, conn, params=[project_id, int(limit)])

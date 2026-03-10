@@ -27,8 +27,8 @@ DB_PATH = "project_viability.db"
 ONGOING_STATUSES = ("evaluated", "approved", "in_agenda", "backlog", "on_hold", "rejected", "executing", "implemented", "handed_off")
 CAPTURE_DEFAULT_STATUSES = ("approved", "in_agenda", "executing")
 NOTE_TYPES = ("general", "proximo_paso", "bloqueador", "riesgo")
-ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder", "other")
-TECH_STACK_OPTIONS = ("python", "vba", "powerbi", "other")
+ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder","agent", "other")
+TECH_STACK_OPTIONS = ("python", "vba", "powerbi", "agent", "other")
 START_EXECUTION_STATUSES = ("evaluated", "approved", "in_agenda")
 END_MARKER = "/end"
 
@@ -120,12 +120,17 @@ def migrate_schema(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE project_notes ADD COLUMN entry_group_id TEXT")
         if "note_title" not in notes_cols:
             conn.execute("ALTER TABLE project_notes ADD COLUMN note_title TEXT")
+        if "progress_percent" not in notes_cols:
+            conn.execute("ALTER TABLE project_notes ADD COLUMN progress_percent INTEGER")
+        if "estimated_end_date" not in notes_cols:
+            conn.execute("ALTER TABLE project_notes ADD COLUMN estimated_end_date TEXT")
 
 
 def _create_views(conn: sqlite3.Connection) -> None:
     """Crea vistas para ultima nota global y ultima nota por tipo."""
     conn.execute("DROP VIEW IF EXISTS v_project_latest_notes")
     conn.execute("DROP VIEW IF EXISTS v_project_last_note")
+    conn.execute("DROP VIEW IF EXISTS v_project_progress_history")
 
     try:
         conn.execute(
@@ -133,7 +138,7 @@ def _create_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
-                is_private, created_at, entry_group_id
+                is_private, created_at, entry_group_id, progress_percent, estimated_end_date
             FROM (
                 SELECT
                     pn.*,
@@ -151,7 +156,7 @@ def _create_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_last_note AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
-                is_private, created_at, entry_group_id
+                is_private, created_at, entry_group_id, progress_percent, estimated_end_date
             FROM (
                 SELECT
                     pn.*,
@@ -170,7 +175,8 @@ def _create_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
-                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id
+                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id,
+                pn.progress_percent, pn.estimated_end_date
             FROM project_notes pn
             JOIN (
                 SELECT project_id, note_type, MAX(datetime(created_at)) AS max_created_at
@@ -194,7 +200,8 @@ def _create_views(conn: sqlite3.Connection) -> None:
             CREATE VIEW v_project_last_note AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
-                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id
+                pn.author, pn.tags, pn.is_private, pn.created_at, pn.entry_group_id,
+                pn.progress_percent, pn.estimated_end_date
             FROM project_notes pn
             JOIN (
                 SELECT project_id, MAX(datetime(created_at)) AS max_created_at
@@ -209,6 +216,53 @@ def _create_views(conn: sqlite3.Connection) -> None:
                 WHERE p2.project_id = pn.project_id
                   AND datetime(p2.created_at) = datetime(pn.created_at)
             )
+            """
+        )
+
+    try:
+        conn.execute(
+            """
+            CREATE VIEW v_project_progress_history AS
+            SELECT
+                x.project_id,
+                x.note_id,
+                x.entry_group_id,
+                x.author,
+                x.note_type,
+                x.note_title,
+                x.progress_percent,
+                x.estimated_end_date,
+                x.created_at
+            FROM (
+                SELECT
+                    pn.*,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY pn.project_id, COALESCE(NULLIF(pn.entry_group_id, ''), CAST(pn.note_id AS TEXT))
+                        ORDER BY pn.note_id ASC
+                    ) AS rn
+                FROM project_notes pn
+                WHERE pn.progress_percent IS NOT NULL
+            ) x
+            WHERE x.rn = 1
+            ORDER BY x.project_id, datetime(x.created_at) DESC, x.note_id DESC
+            """
+        )
+    except sqlite3.OperationalError:
+        conn.execute(
+            """
+            CREATE VIEW v_project_progress_history AS
+            SELECT
+                pn.project_id,
+                pn.note_id,
+                pn.entry_group_id,
+                pn.author,
+                pn.note_type,
+                pn.note_title,
+                pn.progress_percent,
+                pn.estimated_end_date,
+                pn.created_at
+            FROM project_notes pn
+            WHERE pn.progress_percent IS NOT NULL
             """
         )
 
@@ -227,10 +281,18 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             is_private INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             entry_group_id TEXT,
-            note_title TEXT
+            note_title TEXT,
+            progress_percent INTEGER,
+            estimated_end_date TEXT
         )
         """
     )
+    if _table_exists(conn, "project_notes"):
+        notes_cols = _table_columns(conn, "project_notes")
+        if "progress_percent" not in notes_cols:
+            conn.execute("ALTER TABLE project_notes ADD COLUMN progress_percent INTEGER")
+        if "estimated_end_date" not in notes_cols:
+            conn.execute("ALTER TABLE project_notes ADD COLUMN estimated_end_date TEXT")
     migrate_schema(conn)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_project_notes_pid_date ON project_notes(project_id, created_at DESC)"
@@ -368,6 +430,13 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
         note_type = str(note.get("note_type", "")).strip()
         note_text = str(note.get("note_text", "")).strip()
         author = str(note.get("author", "")).strip()
+        progress_percent = note.get("progress_percent")
+        if progress_percent in ("", None):
+            progress_percent = None
+        elif not isinstance(progress_percent, int):
+            raise ValueError("progress_percent debe ser entero entre 0 y 100.")
+        if progress_percent is not None and not (0 <= progress_percent <= 100):
+            raise ValueError("progress_percent debe estar entre 0 y 100.")
         if note_type not in NOTE_TYPES or not note_text or not author:
             continue
         cleaned.append(
@@ -380,6 +449,8 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
                 1 if bool(note.get("is_private", False)) else 0,
                 str(note.get("entry_group_id", "")).strip(),
                 str(note.get("note_title", "")).strip(),
+                progress_percent,
+                str(note.get("estimated_end_date", "")).strip() or None,
             )
         )
 
@@ -389,8 +460,11 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
     conn.executemany(
         """
         INSERT INTO project_notes
-            (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (
+                project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
+                progress_percent, estimated_end_date
+            )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         cleaned,
     )
@@ -431,7 +505,9 @@ def query_notes(
 ) -> pd.DataFrame:
     """Consulta notas con filtros opcionales combinables."""
     sql = """
-        SELECT note_id, project_id, note_type, note_title, author, tags, is_private, note_text, created_at, entry_group_id
+        SELECT
+            note_id, project_id, note_type, note_title, author, tags, is_private, note_text, created_at, entry_group_id,
+            progress_percent, estimated_end_date
         FROM project_notes
         WHERE 1=1
     """
@@ -494,7 +570,7 @@ def _get_recent_tags(conn: sqlite3.Connection, limit_rows: int = 300, max_tags: 
 def _latest_project_note(conn: sqlite3.Connection, project_id: str) -> dict[str, Any] | None:
     row = conn.execute(
         """
-        SELECT note_id, note_type, note_title, note_text, author, tags, created_at
+        SELECT note_id, note_type, note_title, note_text, author, tags, created_at, progress_percent, estimated_end_date
         FROM v_project_last_note
         WHERE project_id = ?
         LIMIT 1
@@ -514,6 +590,61 @@ def _days_since(dt_str: str | None) -> int | None:
         return max(0, (date.today() - dt.date()).days)
     except Exception:
         return None
+
+
+def calculate_auto_progress(estimated_end_date: date | None) -> int | None:
+    if not estimated_end_date:
+        return None
+    today = date.today()
+    if estimated_end_date <= today:
+        return 100
+    total_days = 120
+    elapsed = total_days - (estimated_end_date - today).days
+    return max(0, min(100, int(round((elapsed / total_days) * 100))))
+
+
+def get_project_progress_trend(conn: sqlite3.Connection, project_id: str, *, limit: int = 50) -> pd.DataFrame:
+    return pd.read_sql_query(
+        """
+        SELECT
+            project_id, note_id, entry_group_id, author, note_type, note_title,
+            progress_percent, estimated_end_date, created_at
+        FROM v_project_progress_history
+        WHERE project_id = ?
+        ORDER BY datetime(created_at) DESC, note_id DESC
+        LIMIT ?
+        """,
+        conn,
+        params=[project_id, int(limit)],
+    )
+
+
+def _progress_trend_symbol(last_three: list[int]) -> str:
+    if len(last_three) < 2:
+        return "->"
+    if last_three[0] > last_three[1]:
+        return "↑"
+    if last_three[0] < last_three[1]:
+        return "↓"
+    return "->"
+
+
+def _clear_capture_saved_flag(project_id: str) -> None:
+    st.session_state[f"ops_capture_saved_{project_id}"] = False
+
+
+def _progress_cell_style(value: Any) -> str:
+    if value is None or pd.isna(value):
+        return ""
+    try:
+        v = float(value)
+    except Exception:
+        return ""
+    if v <= 39:
+        return "background-color: #f8d7da; color: #721c24; font-weight: 700;"
+    if v <= 79:
+        return "background-color: #fff3cd; color: #856404; font-weight: 700;"
+    return "background-color: #d4edda; color: #155724; font-weight: 700;"
 
 
 def get_executive_summary_df(
@@ -550,7 +681,9 @@ def get_executive_summary_df(
             ln.created_at AS last_note_at,
             pp.note_text AS last_proximo_paso,
             bb.note_text AS last_bloqueador,
-            rr.note_text AS last_riesgo
+            rr.note_text AS last_riesgo,
+            ph.progress_percent AS current_progress_percent,
+            ph.created_at AS last_progress_at
         FROM projects p
         LEFT JOIN v_project_last_note ln
             ON ln.project_id = p.{id_col}
@@ -562,6 +695,18 @@ def get_executive_summary_df(
             ON bb.project_id = p.{id_col} AND bb.note_type = 'bloqueador'
         LEFT JOIN v_project_latest_notes rr
             ON rr.project_id = p.{id_col} AND rr.note_type = 'riesgo'
+        LEFT JOIN (
+            SELECT h.project_id, h.progress_percent, h.created_at
+            FROM v_project_progress_history h
+            JOIN (
+                SELECT project_id, MAX(datetime(created_at)) AS max_created_at
+                FROM v_project_progress_history
+                GROUP BY project_id
+            ) mx
+              ON mx.project_id = h.project_id
+             AND datetime(mx.max_created_at) = datetime(h.created_at)
+        ) ph
+            ON ph.project_id = p.{id_col}
         WHERE p.{status_expr} IN ({placeholders})
         ORDER BY COALESCE(ln.created_at, '') DESC, p.{id_col}
     """
@@ -576,6 +721,11 @@ def get_executive_summary_df(
                 "Last proximo_paso",
                 "Last bloqueador",
                 "Last riesgo",
+                "Current Progress %",
+                "Last Progress Date",
+                "Progress Trend",
+                "Progress Delta",
+                "Progress History",
                 "Loop link",
                 "Repo link",
                 "Artifacts link",
@@ -596,10 +746,29 @@ def get_executive_summary_df(
                 | df["last_proximo_paso"].astype(str).str.lower().str.contains(q, na=False)
                 | df["last_bloqueador"].astype(str).str.lower().str.contains(q, na=False)
                 | df["last_riesgo"].astype(str).str.lower().str.contains(q, na=False)
+                | df["current_progress_percent"].astype(str).str.lower().str.contains(q, na=False)
             )
             df = df[mask]
 
     df = df[df["Days since last"] >= int(min_days_without_update)]
+
+    progress_trends: list[str] = []
+    progress_deltas: list[int | None] = []
+    progress_histories: list[list[int]] = []
+    for project_id in df["project_id"].tolist():
+        p_hist_df = get_project_progress_trend(conn, project_id, limit=30)
+        vals = [
+            int(v)
+            for v in p_hist_df["progress_percent"].tolist()
+            if isinstance(v, (int, float)) and not pd.isna(v)
+        ]
+        last_three = vals[:3]
+        progress_histories.append(vals[::-1] if vals else [])
+        progress_trends.append(_progress_trend_symbol(last_three))
+        if len(last_three) >= 2:
+            progress_deltas.append(last_three[0] - last_three[1])
+        else:
+            progress_deltas.append(None)
 
     out = pd.DataFrame(
         {
@@ -610,6 +779,11 @@ def get_executive_summary_df(
             "Last proximo_paso": df["last_proximo_paso"].fillna(""),
             "Last bloqueador": df["last_bloqueador"].fillna(""),
             "Last riesgo": df["last_riesgo"].fillna(""),
+            "Current Progress %": df["current_progress_percent"],
+            "Last Progress Date": df["last_progress_at"].fillna(""),
+            "Progress Trend": progress_trends,
+            "Progress Delta": progress_deltas,
+            "Progress History": progress_histories,
             "Loop link": df["loop_url"].fillna(""),
             "Repo link": df["repo_url"].fillna(""),
             "Artifacts link": df["artifacts_url"].fillna(""),
@@ -720,6 +894,9 @@ def _render_last_notes_cards(conn: sqlite3.Connection, project_id: str) -> None:
             title_txt = f"{data.get('note_title', '').strip()} - " if data.get("note_title") else ""
             st.caption(f"{title_txt}{data.get('created_at', '')} - {data.get('author', t('na'))}")
             st.write(data.get("note_text", ""))
+            progress_val = data.get("progress_percent")
+            if progress_val is not None and not pd.isna(progress_val):
+                st.caption(f"{t('ops_progress_percent_label')}: {int(progress_val)}%")
             if data.get("tags"):
                 st.caption(f"{t('ops_tags_label')}: {data['tags']}")
 
@@ -749,6 +926,12 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
     last_update_text = latest_note["created_at"] if latest_note else t("ops_no_notes")
     has_saved_loop_url = bool((selected_project.loop_url or "").strip())
     is_first_entry = latest_note is None
+    latest_progress_df = get_project_progress_trend(conn, selected_project.project_id, limit=1)
+    last_progress_value = None
+    last_progress_date = None
+    if not latest_progress_df.empty:
+        last_progress_value = latest_progress_df.iloc[0]["progress_percent"]
+        last_progress_date = latest_progress_df.iloc[0]["created_at"]
 
     info1, info2, info3 = st.columns([1, 1, 2])
     with info1:
@@ -764,6 +947,13 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             st.caption(selected_project.loop_url)
         else:
             st.write(t("no_link"))
+
+    if last_progress_value is not None and not pd.isna(last_progress_value):
+        st.caption(
+            f"{t('ops_progress_last_value')}: {int(last_progress_value)}% ({t('ops_progress_last_date')}: {last_progress_date})"
+        )
+    else:
+        st.caption(t("ops_progress_no_data"))
 
     links_col1, links_col2, links_col3 = st.columns(3)
     with links_col1:
@@ -848,27 +1038,94 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                 except Exception as exc:
                     st.error(f"{t('ops_link_save_error')}: {exc}")
 
-    recent_tags = _get_recent_tags(conn)
     default_author = str(st.session_state.get("author", st.session_state.get("current_user", "Xiomara Monroy")))
     note_help = _note_type_help()
     note_example = _note_type_example()
+    capture_saved_key = f"ops_capture_saved_{selected_project.project_id}"
+    if capture_saved_key not in st.session_state:
+        st.session_state[capture_saved_key] = False
 
     with st.form(key=f"ops_capture_form_{selected_project.project_id}", clear_on_submit=False):
-        note_title = st.text_input(t("ops_note_title_optional"))
-        selected_tags = st.multiselect(t("ops_recent_tags"), options=recent_tags)
-        tags_csv = st.text_input(t("ops_extra_tags_csv"), placeholder=t("ops_extra_tags_placeholder"))
-        author = st.text_input(t("ops_author"), value=default_author)
+        author = st.text_input(
+            t("ops_author"),
+            value=default_author,
+            key=f"ops_author_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
+        enable_progress_capture = st.checkbox(
+            t("ops_progress_capture_enable"),
+            value=True,
+            key=f"ops_enable_progress_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
+        default_progress = int(last_progress_value) if last_progress_value is not None and not pd.isna(last_progress_value) else 0
+        progress_percent_input = st.number_input(
+            t("ops_progress_percent_label"),
+            min_value=0,
+            max_value=100,
+            value=default_progress,
+            step=1,
+            disabled=not enable_progress_capture,
+            key=f"ops_progress_percent_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
+        estimated_end_date_input = st.date_input(
+            t("ops_estimated_end_date_label"),
+            value=None,
+            key=f"ops_estimated_end_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
+        if isinstance(estimated_end_date_input, date):
+            suggested_progress = calculate_auto_progress(estimated_end_date_input)
+            if suggested_progress is not None:
+                st.caption(f"{t('ops_progress_suggested')}: {suggested_progress}%")
 
-        general = st.text_area(label_note_type("general"), placeholder=note_help["general"], height=120)
+        general = st.text_area(
+            label_note_type("general"),
+            placeholder=note_help["general"],
+            height=120,
+            key=f"ops_general_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
         st.caption(f"{note_help['general']} {note_example['general']}")
-        proximo_paso = st.text_area(label_note_type("proximo_paso"), placeholder=note_help["proximo_paso"], height=120)
+        proximo_paso = st.text_area(
+            label_note_type("proximo_paso"),
+            placeholder=note_help["proximo_paso"],
+            height=120,
+            key=f"ops_next_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
         st.caption(f"{note_help['proximo_paso']} {note_example['proximo_paso']}")
-        bloqueador = st.text_area(label_note_type("bloqueador"), placeholder=note_help["bloqueador"], height=120)
+        bloqueador = st.text_area(
+            label_note_type("bloqueador"),
+            placeholder=note_help["bloqueador"],
+            height=120,
+            key=f"ops_blocker_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
         st.caption(f"{note_help['bloqueador']} {note_example['bloqueador']}")
-        riesgo = st.text_area(label_note_type("riesgo"), placeholder=note_help["riesgo"], height=120)
+        riesgo = st.text_area(
+            label_note_type("riesgo"),
+            placeholder=note_help["riesgo"],
+            height=120,
+            key=f"ops_risk_{selected_project.project_id}",
+            on_change=_clear_capture_saved_flag,
+            args=(selected_project.project_id,),
+        )
         st.caption(f"{note_help['riesgo']} {note_example['riesgo']}")
-
-        submitted = st.form_submit_button(t("ops_save_update_btn"), type="primary")
+        c_btn, c_state = st.columns([1, 2])
+        with c_btn:
+            submitted = st.form_submit_button(t("ops_save_update_btn"), type="primary")
+        with c_state:
+            if st.session_state.get(capture_saved_key):
+                st.success("Actualización guardada")
 
     if submitted:
         if not author.strip():
@@ -876,8 +1133,11 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
         elif not loop_url_input.strip():
             st.error(t("ops_loop_required_to_save"))
         else:
-            tags_merged = _merge_tags(selected_tags, tags_csv)
             entry_group_id = uuid.uuid4().hex
+            progress_percent_value = int(progress_percent_input) if enable_progress_capture else None
+            estimated_end_date_value = (
+                estimated_end_date_input.isoformat() if isinstance(estimated_end_date_input, date) else None
+            )
             notes_to_insert = []
             for ntype, ntext in (
                 ("general", general),
@@ -892,10 +1152,12 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                             "note_type": ntype,
                             "note_text": str(ntext).strip(),
                             "author": author.strip(),
-                            "tags": tags_merged,
+                            "tags": "",
                             "is_private": False,
                             "entry_group_id": entry_group_id,
-                            "note_title": note_title.strip(),
+                            "note_title": "",
+                            "progress_percent": progress_percent_value,
+                            "estimated_end_date": estimated_end_date_value,
                         }
                     )
 
@@ -919,6 +1181,7 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                     )
                     if status_after:
                         st.info(f"{t('ops_status_changed_to')} {label_status(status_after)}")
+                    st.session_state[capture_saved_key] = True
                     st.rerun()
                 except Exception as exc:
                     st.error(f"{t('ops_save_update_error')}: {exc}")
@@ -969,17 +1232,68 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
         st.info(t("ops_no_results_filters"))
         return
 
-    _export_buttons(summary_df, prefix="resumen_ejecutivo", label_suffix=t("ops_executive_summary"))
+    summary_view = summary_df.copy()
+    summary_view["% Avance"] = pd.to_numeric(summary_view["Current Progress %"], errors="coerce")
+    if "Current Progress %" in summary_view.columns:
+        summary_view = summary_view.drop(columns=["Current Progress %"])
+
+    desired_order = ["Project", "% Avance"]
+    remaining = [c for c in summary_view.columns if c not in ("Project", "% Avance", "Status")]
+    desired_order.extend(remaining)
+    if "Status" in summary_view.columns:
+        desired_order.append("Status")
+    summary_view = summary_view[desired_order]
+
+    _export_buttons(summary_view, prefix="resumen_ejecutivo", label_suffix=t("ops_executive_summary"))
+
+    styled_summary = (
+        summary_view.style
+        .map(_progress_cell_style, subset=["% Avance"])
+        .format({"% Avance": lambda v: "" if pd.isna(v) else f"{int(v)}%"})
+    )
     st.dataframe(
-        summary_df,
+        styled_summary,
         use_container_width=True,
         hide_index=True,
         column_config={
+            "Status": st.column_config.TextColumn(t("status")),
+            "Last Progress Date": st.column_config.TextColumn(t("ops_progress_last_date")),
+            "Progress Trend": st.column_config.TextColumn(t("ops_progress_trend")),
             "Loop link": st.column_config.LinkColumn(t("loop_label")),
             "Repo link": st.column_config.LinkColumn(t("repo_link")),
             "Artifacts link": st.column_config.LinkColumn(t("artifacts_link")),
         },
     )
+
+    st.markdown("---")
+    st.markdown(f"**{t('ops_progress_overview_title')}**")
+    series_by_project: dict[str, list[int | None]] = {}
+    max_points = 0
+    for _, row in summary_df.iterrows():
+        project_id = str(row.get("Project ID", ""))
+        project_name = str(row.get("Project", project_id))
+        history = row.get("Progress History") if isinstance(row.get("Progress History"), list) else []
+        if history:
+            label = f"{project_name} ({project_id})"
+            series_by_project[label] = [int(v) if v is not None else None for v in history]
+            max_points = max(max_points, len(history))
+
+    if not series_by_project:
+        st.info(t("ops_progress_no_data"))
+    else:
+        padded = {
+            label: values + [None] * (max_points - len(values))
+            for label, values in series_by_project.items()
+        }
+        progress_compare_df = pd.DataFrame(padded)
+        progress_compare_df.index = range(1, max_points + 1)
+        st.caption("Comparativo de avance por proyecto en una sola vista.")
+        st.line_chart(
+            progress_compare_df,
+            x_label="Registro",
+            y_label=t("ops_progress_percent_label"),
+            use_container_width=True,
+        )
 
 
 def _render_cards(df: pd.DataFrame) -> None:
@@ -995,6 +1309,9 @@ def _render_cards(df: pd.DataFrame) -> None:
             )
             if first.get("tags"):
                 st.caption(f"{t('ops_tags_label')}: {first['tags']}")
+            progress_first = first.get("progress_percent")
+            if progress_first is not None and not pd.isna(progress_first):
+                st.caption(f"{t('ops_progress_percent_label')}: {int(first['progress_percent'])}%")
             for _, row in chunk.iterrows():
                 title = str(row.get("note_title") or "").strip()
                 title_prefix = f"{title} - " if title else ""
@@ -1013,14 +1330,12 @@ def _render_timeline_tab(conn: sqlite3.Connection) -> None:
     )
     selected_project_id = options[selected_label].project_id if selected_label else None
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3 = st.columns(3)
     with col1:
         filter_text = st.text_input(t("ops_search_text"), key="ops_tl_text")
     with col2:
-        filter_tag = st.text_input(t("ops_filter_tag"), key="ops_tl_tag")
-    with col3:
         filter_type = st.selectbox(t("ops_type"), options=["todos", *NOTE_TYPES], format_func=lambda x: t("ops_all") if x == "todos" else label_note_type(x), key="ops_tl_type")
-    with col4:
+    with col3:
         limit = st.number_input(t("ops_limit"), min_value=10, max_value=2000, value=200, step=10, key="ops_tl_limit")
 
     d1, d2 = st.columns(2)
@@ -1036,7 +1351,7 @@ def _render_timeline_tab(conn: sqlite3.Connection) -> None:
             conn,
             project_id=selected_project_id,
             text_query=filter_text or None,
-            tag_contains=filter_tag or None,
+            tag_contains=None,
             date_from=date_from if isinstance(date_from, date) else None,
             date_to=date_to if isinstance(date_to, date) else None,
             note_type=note_type_filter,
@@ -1057,12 +1372,13 @@ def _render_timeline_tab(conn: sqlite3.Connection) -> None:
         _render_cards(project_df)
 
     st.markdown("---")
+    st.markdown("<hr style='border: 2px solid #9aa0a6; margin: 20px 0 12px 0;'>", unsafe_allow_html=True)
     st.markdown(f"**{t('ops_global_view')}**")
     global_df = query_notes(
         conn,
         project_id=None,
         text_query=filter_text or None,
-        tag_contains=filter_tag or None,
+        tag_contains=None,
         date_from=date_from if isinstance(date_from, date) else None,
         date_to=date_to if isinstance(date_to, date) else None,
         note_type=note_type_filter,

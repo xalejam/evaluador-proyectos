@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -32,6 +32,8 @@ class OperationalTrackingService:
         author: str,
         tags: str,
         note_title: str = "",
+        progress_percent: int | None = None,
+        estimated_end_date: str | None = None,
     ) -> list[int]:
         entry_group_id = uuid.uuid4().hex
         notes = []
@@ -48,9 +50,40 @@ class OperationalTrackingService:
                         "entry_group_id": entry_group_id,
                         "note_title": note_title,
                         "is_private": False,
+                        "progress_percent": progress_percent,
+                        "estimated_end_date": estimated_end_date,
                     }
                 )
         return self.notes_repo.insert_notes_batch(notes)
+
+    def get_project_progress_trend(self, project_id: str) -> dict[str, Any]:
+        df = self.notes_repo.get_project_progress_trend(project_id, limit=50)
+        if df.empty:
+            return {"history": [], "last_three": [], "delta_last": None}
+        history = df.to_dict(orient="records")
+        last_three = history[:3]
+        delta_last = None
+        if len(last_three) >= 2:
+            curr = last_three[0].get("progress_percent")
+            prev = last_three[1].get("progress_percent")
+            if isinstance(curr, (int, float)) and isinstance(prev, (int, float)):
+                delta_last = int(curr) - int(prev)
+        return {"history": history, "last_three": last_three, "delta_last": delta_last}
+
+    def calculate_auto_progress(self, estimated_end_date: str | None) -> int | None:
+        if not estimated_end_date:
+            return None
+        try:
+            end_dt = datetime.strptime(estimated_end_date, "%Y-%m-%d").date()
+        except ValueError:
+            return None
+        today = date.today()
+        if end_dt <= today:
+            return 100
+        # Asuncion pragmatica: ventana lineal de 120 dias hacia la fecha objetivo.
+        total_days = 120
+        elapsed = total_days - (end_dt - today).days
+        return max(0, min(100, int(round((elapsed / total_days) * 100))))
 
     def get_executive_summary(self, filters: dict[str, Any]) -> pd.DataFrame:
         statuses = filters.get("statuses") or []

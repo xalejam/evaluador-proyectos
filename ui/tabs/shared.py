@@ -67,6 +67,7 @@ TRANSLATIONS = {
         'total_trackings': 'Seguimientos',
         'high_priority': 'Alta Prioridad',
         'implemented': 'Implementados',
+        'executing': 'En ejecución',
         
         # Formulario de proyecto
         'project_info': 'Información del Proyecto',
@@ -184,6 +185,7 @@ TRANSLATIONS = {
         'scale_reference_help': 'No afecta cálculos de ROI.',
         'developer_team_label': 'Equipo de desarrollo',
         'loop_url_label': 'Loop URL',
+        'loop_optional_viability_note': 'Opcional en Viabilidad. Debe quedar completo en Bitácora (primera entrada).',
         'save_evaluation_status_label': 'Estado al guardar evaluación',
         'action_owner_label': 'Responsable de la acción',
         'evaluate_btn': '🧮 Evaluar',
@@ -243,6 +245,16 @@ TRANSLATIONS = {
         'ops_no_eligible_projects': 'No hay proyectos elegibles para captura rápida.',
         'ops_no_notes': 'Sin notas',
         'ops_last_update': 'Última actualización',
+        'ops_progress_last_value': 'Último avance',
+        'ops_progress_last_date': 'Fecha último avance',
+        'ops_progress_no_data': 'Sin datos de avance',
+        'ops_progress_capture_enable': 'Registrar % de avance en esta actualización',
+        'ops_progress_percent_label': '% avance del proyecto',
+        'ops_estimated_end_date_label': 'Fecha estimada de cierre (opcional)',
+        'ops_progress_suggested': 'Progreso sugerido basado en días transcurridos',
+        'ops_progress_trend': 'Tendencia de avance',
+        'ops_progress_drop_warning': 'Progreso bajó sin justificación visible:',
+        'ops_progress_overview_title': 'Avance por proyecto',
         'ops_first_entry_loop_required': 'Primera entrada del proyecto: el link de Loop es obligatorio antes de guardar la actualización.',
         'ops_loop_missing_warning': 'Este proyecto aún no tiene link de Loop. Debes configurarlo para continuar registrando entradas.',
         'ops_loop_doc_link': 'Link de documentación (Loop)',
@@ -317,10 +329,12 @@ TRANSLATIONS = {
         'artifacts_type_powerbi': 'Power BI',
         'artifacts_type_excel_vba': 'Excel/VBA',
         'artifacts_type_folder': 'Carpeta',
+        'artifacts_type_agent': 'Agente IA',
         'artifacts_type_other': 'Otro',
         'tech_stack_python': 'Python',
         'tech_stack_vba': 'VBA',
         'tech_stack_powerbi': 'Power BI',
+        'tech_stack_agent': 'Agente IA',
         'tech_stack_other': 'Otro',
         'tracking_auto_data_info': '🤖 **Datos actualizados automáticamente desde encuesta.** Puedes modificar manualmente si es necesario.',
         'tracking_manual_or_wait_info': '✋ **Completar manualmente** o esperar datos de encuesta automática.',
@@ -537,6 +551,7 @@ TRANSLATIONS = {
         'total_trackings': 'Acompanhamentos',
         'high_priority': 'Alta Prioridade',
         'implemented': 'Implementados',
+        'executing': 'Em execução',
         
         # Formulario de proyecto
         'project_info': 'Informações do Projeto',
@@ -654,6 +669,7 @@ TRANSLATIONS = {
         'scale_reference_help': 'Não afeta os cálculos de ROI.',
         'developer_team_label': 'Time de desenvolvimento',
         'loop_url_label': 'Loop URL',
+        'loop_optional_viability_note': 'Opcional na Viabilidade. Deve ser preenchido no Registro (primeira entrada).',
         'save_evaluation_status_label': 'Estado ao salvar avaliação',
         'action_owner_label': 'Responsável pela ação',
         'evaluate_btn': '🧮 Avaliar',
@@ -713,6 +729,16 @@ TRANSLATIONS = {
         'ops_no_eligible_projects': 'Não há projetos elegíveis para captura rápida.',
         'ops_no_notes': 'Sem notas',
         'ops_last_update': 'Última atualização',
+        'ops_progress_last_value': 'Último avanço',
+        'ops_progress_last_date': 'Data do último avanço',
+        'ops_progress_no_data': 'Sem dados de avanço',
+        'ops_progress_capture_enable': 'Registrar % de avanço nesta atualização',
+        'ops_progress_percent_label': '% de avanço do projeto',
+        'ops_estimated_end_date_label': 'Data estimada de encerramento (opcional)',
+        'ops_progress_suggested': 'Progresso sugerido com base nos dias transcorridos',
+        'ops_progress_trend': 'Tendência de avanço',
+        'ops_progress_drop_warning': 'O progresso caiu sem justificativa visível:',
+        'ops_progress_overview_title': 'Avanço por projeto',
         'ops_first_entry_loop_required': 'Primeira entrada do projeto: o link do Loop é obrigatório antes de salvar a atualização.',
         'ops_loop_missing_warning': 'Este projeto ainda não possui link do Loop. Configure para continuar registrando entradas.',
         'ops_loop_doc_link': 'Link de documentação (Loop)',
@@ -787,10 +813,12 @@ TRANSLATIONS = {
         'artifacts_type_powerbi': 'Power BI',
         'artifacts_type_excel_vba': 'Excel/VBA',
         'artifacts_type_folder': 'Pasta',
+        'artifacts_type_agent': 'Agente IA',
         'artifacts_type_other': 'Outro',
         'tech_stack_python': 'Python',
         'tech_stack_vba': 'VBA',
         'tech_stack_powerbi': 'Power BI',
+        'tech_stack_agent': 'Agente IA',
         'tech_stack_other': 'Outro',
         'tracking_auto_data_info': '🤖 **Dados atualizados automaticamente via pesquisa.** Você pode ajustar manualmente se necessário.',
         'tracking_manual_or_wait_info': '✋ **Preencha manualmente** ou aguarde dados automáticos da pesquisa.',
@@ -1668,14 +1696,11 @@ def render_sidebar_stats():
                 implemented = len([p for p in projects if p['status'] == 'implemented'])
                 st.metric(t('implemented'), implemented)
 
+                executing = len([p for p in projects if str(p.get('status', '')).lower() in ('executing', 'in_execution')])
+                st.metric(t('executing'), executing)
+
 def init_excel_manager():
     """Inicializa el gestor de Excel"""
     if 'excel_manager' not in st.session_state:
         st.session_state.excel_manager = ExcelSharePointManager("")
         st.session_state.calculator = ProjectViabilityCalculator(st.session_state.excel_manager)
-        
-        # Migración automática 1 vez desde Excel legado si existe y la DB está vacía
-        has_projects = len(st.session_state.excel_manager.get_all_projects()) > 0
-        legacy_excel = "project_viability.xlsx"
-        if (not has_projects) and os.path.exists(legacy_excel):
-            st.session_state.excel_manager.load_from_local_excel(legacy_excel)

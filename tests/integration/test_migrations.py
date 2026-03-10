@@ -15,6 +15,8 @@ def test_ensure_schema_idempotent(temp_db_conn):
     assert "updated_at" in projects_cols
     assert "entry_group_id" in notes_cols
     assert "note_title" in notes_cols
+    assert "progress_percent" in notes_cols
+    assert "estimated_end_date" in notes_cols
 
 
 def test_ensure_schema_creates_evaluations_table(temp_db_conn):

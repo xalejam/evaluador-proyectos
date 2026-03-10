@@ -1366,7 +1366,7 @@ def _render_timeline_tab(conn: sqlite3.Connection) -> None:
         _render_cards(project_df)
 
     st.markdown("---")
-    st.markdown("<hr style='border: 2px solid #9aa0a6; margin: 20px 0 12px 0;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border: 3px solid #8a8f98; margin: 22px 0 12px 0;'>", unsafe_allow_html=True)
     st.markdown(f"**{t('ops_global_view')}**")
     global_df = query_notes(
         conn,

@@ -1686,18 +1686,19 @@ def render_sidebar_stats():
         col_stats1, col_stats2 = st.columns(2)
         with col_stats1:
             st.metric(t('total_projects'), len(projects))
-            st.metric(t('total_trackings'), len(trackings))
-        
-        with col_stats2:
             if projects:
                 high_priority = len([p for p in projects if p['priority'] == t('priority_high')])
                 st.metric(t('high_priority'), high_priority)
-                
+        
+        with col_stats2:
+            if projects:
+                executing = len([p for p in projects if str(p.get('status', '')).lower() in ('executing', 'in_execution')])
+                st.metric(t('executing'), executing)
+
                 implemented = len([p for p in projects if p['status'] == 'implemented'])
                 st.metric(t('implemented'), implemented)
 
-                executing = len([p for p in projects if str(p.get('status', '')).lower() in ('executing', 'in_execution')])
-                st.metric(t('executing'), executing)
+        st.metric(t('total_trackings'), len(trackings))
 
 def init_excel_manager():
     """Inicializa el gestor de Excel"""

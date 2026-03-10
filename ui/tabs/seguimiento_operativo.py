@@ -647,6 +647,20 @@ def _progress_cell_style(value: Any) -> str:
     return "background-color: #d4edda; color: #155724; font-weight: 700;"
 
 
+def _progress_badge(value: Any) -> str:
+    if value is None or pd.isna(value):
+        return "Sin dato"
+    try:
+        v = int(float(value))
+    except Exception:
+        return "Sin dato"
+    if v <= 39:
+        return f"🟥 {v}%"
+    if v <= 79:
+        return f"🟨 {v}%"
+    return f"🟩 {v}%"
+
+
 def get_executive_summary_df(
     conn: sqlite3.Connection,
     *,
@@ -1050,15 +1064,11 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             t("ops_author"),
             value=default_author,
             key=f"ops_author_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         enable_progress_capture = st.checkbox(
             t("ops_progress_capture_enable"),
             value=True,
             key=f"ops_enable_progress_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         default_progress = int(last_progress_value) if last_progress_value is not None and not pd.isna(last_progress_value) else 0
         progress_percent_input = st.number_input(
@@ -1069,15 +1079,11 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             step=1,
             disabled=not enable_progress_capture,
             key=f"ops_progress_percent_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         estimated_end_date_input = st.date_input(
             t("ops_estimated_end_date_label"),
             value=None,
             key=f"ops_estimated_end_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         if isinstance(estimated_end_date_input, date):
             suggested_progress = calculate_auto_progress(estimated_end_date_input)
@@ -1089,8 +1095,6 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             placeholder=note_help["general"],
             height=120,
             key=f"ops_general_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         st.caption(f"{note_help['general']} {note_example['general']}")
         proximo_paso = st.text_area(
@@ -1098,8 +1102,6 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             placeholder=note_help["proximo_paso"],
             height=120,
             key=f"ops_next_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         st.caption(f"{note_help['proximo_paso']} {note_example['proximo_paso']}")
         bloqueador = st.text_area(
@@ -1107,8 +1109,6 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             placeholder=note_help["bloqueador"],
             height=120,
             key=f"ops_blocker_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         st.caption(f"{note_help['bloqueador']} {note_example['bloqueador']}")
         riesgo = st.text_area(
@@ -1116,8 +1116,6 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             placeholder=note_help["riesgo"],
             height=120,
             key=f"ops_risk_{selected_project.project_id}",
-            on_change=_clear_capture_saved_flag,
-            args=(selected_project.project_id,),
         )
         st.caption(f"{note_help['riesgo']} {note_example['riesgo']}")
         c_btn, c_state = st.columns([1, 2])
@@ -1233,7 +1231,8 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
         return
 
     summary_view = summary_df.copy()
-    summary_view["% Avance"] = pd.to_numeric(summary_view["Current Progress %"], errors="coerce")
+    progress_numeric = pd.to_numeric(summary_view["Current Progress %"], errors="coerce")
+    summary_view["% Avance"] = progress_numeric.apply(_progress_badge)
     if "Current Progress %" in summary_view.columns:
         summary_view = summary_view.drop(columns=["Current Progress %"])
 
@@ -1246,13 +1245,8 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
 
     _export_buttons(summary_view, prefix="resumen_ejecutivo", label_suffix=t("ops_executive_summary"))
 
-    styled_summary = (
-        summary_view.style
-        .map(_progress_cell_style, subset=["% Avance"])
-        .format({"% Avance": lambda v: "" if pd.isna(v) else f"{int(v)}%"})
-    )
     st.dataframe(
-        styled_summary,
+        summary_view,
         use_container_width=True,
         hide_index=True,
         column_config={

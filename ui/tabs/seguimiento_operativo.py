@@ -1059,7 +1059,7 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
     if capture_saved_key not in st.session_state:
         st.session_state[capture_saved_key] = False
 
-    with st.form(key=f"ops_capture_form_{selected_project.project_id}", clear_on_submit=False):
+    with st.form(key=f"ops_capture_form_{selected_project.project_id}", clear_on_submit=True):
         author = st.text_input(
             t("ops_author"),
             value=default_author,
@@ -1179,11 +1179,6 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                     )
                     if status_after:
                         st.info(f"{t('ops_status_changed_to')} {label_status(status_after)}")
-                    # Clear the form fields after successful save
-                    st.session_state[f"ops_general_{selected_project.project_id}"] = ""
-                    st.session_state[f"ops_next_{selected_project.project_id}"] = ""
-                    st.session_state[f"ops_blocker_{selected_project.project_id}"] = ""
-                    st.session_state[f"ops_risk_{selected_project.project_id}"] = ""
                     st.session_state[capture_saved_key] = True
                     st.rerun()
                 except Exception as exc:

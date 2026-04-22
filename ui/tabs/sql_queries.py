@@ -5,6 +5,7 @@ Pestana para ejecutar consultas SQL de solo lectura sobre SQLite.
 import io
 import re
 import sqlite3
+from pathlib import Path
 import pandas as pd
 import streamlit as st
 from ui.tabs.shared import t
@@ -79,7 +80,8 @@ def render_sql_queries_tab():
 
     try:
         db_path = st.session_state.excel_manager.db_path
-        with sqlite3.connect(db_path) as conn:
+        db_uri = Path(db_path).as_uri() + "?mode=ro"
+        with sqlite3.connect(db_uri, uri=True) as conn:
             df = pd.read_sql_query(_normalize_query(query), conn)
     except Exception as e:
         st.error(f"{t('sql_error_running_query')}: {e}")

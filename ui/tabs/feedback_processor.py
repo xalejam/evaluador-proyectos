@@ -1,6 +1,6 @@
 ﻿# feedback_processor.py
 """
-MÃ³dulo para procesar cuestionarios de feedback y actualizar tracking automÃ¡ticamente
+Módulo para procesar cuestionarios de feedback y actualizar tracking automáticamente
 """
 
 import streamlit as st
@@ -20,11 +20,11 @@ class FeedbackProcessor:
         # Mapeo de columnas del cuestionario
         self.column_mapping = {
             'project_id': 'ID DEL PROYECTO',
-            'satisfaction': 'Â¿QuÃ© tan satisfecho/a estÃ¡s con la nueva herramienta?',
-            'time_saved_text': 'Â¿CuÃ¡nto tiempo te ahorra comparado con el proceso anterior?',
-            'time_saved_percent': 'Â¿QuÃ© porcentaje de tiempo te ahorra comparado con el proceso anterior?',
-            'benefits': 'Â¿QuÃ© beneficios adicionales has notado? (opcional)',
-            'problems': 'Â¿QuÃ© problemas o dificultades has enfrentado? (opcional)',
+            'satisfaction': 'Â¿Qué tan satisfecho/a estás con la nueva herramienta?',
+            'time_saved_text': 'Â¿Cuánto tiempo te ahorra comparado con el proceso anterior?',
+            'time_saved_percent': 'Â¿Qué porcentaje de tiempo te ahorra comparado con el proceso anterior?',
+            'benefits': 'Â¿Qué beneficios adicionales has notado? (opcional)',
+            'problems': 'Â¿Qué problemas o dificultades has enfrentado? (opcional)',
             'processed': 'Procesado'  # Columna L para marcar como procesado
         }
     
@@ -66,7 +66,7 @@ class FeedbackProcessor:
         # Limpiar project_id
         df_clean[self.column_mapping['project_id']] = df_clean[self.column_mapping['project_id']].astype(str).str.strip()
         
-        # Limpiar satisfacciÃ³n (debe ser 1-10)
+        # Limpiar satisfacción (debe ser 1-10)
         satisfaction_col = self.column_mapping['satisfaction']
         df_clean[satisfaction_col] = pd.to_numeric(df_clean[satisfaction_col], errors='coerce')
         df_clean = df_clean[df_clean[satisfaction_col].between(1, 10)]
@@ -97,7 +97,7 @@ class FeedbackProcessor:
         if df_clean is None:
             return None
         
-        # Filtrar respuestas no procesadas (columna Procesado vacÃ­a)
+        # Filtrar respuestas no procesadas (columna Procesado vací­a)
         processed_col = self.column_mapping['processed']
         unprocessed = df_clean[
             (df_clean[processed_col].isna()) | 
@@ -108,7 +108,7 @@ class FeedbackProcessor:
         return unprocessed
     
     def aggregate_responses_by_project(self, df_responses):
-        """Agrega respuestas por proyecto (promedio + concatenaciÃ³n de textos)"""
+        """Agrega respuestas por proyecto (promedio + concatenación de textos)"""
         if df_responses is None or len(df_responses) == 0:
             return {}
         
@@ -126,7 +126,7 @@ class FeedbackProcessor:
             avg_satisfaction = project_responses[satisfaction_col].mean()
             avg_time_reduction = project_responses['time_reduction_percent'].mean()
             
-            # Concatenar textos (eliminar vacÃ­os y duplicados)
+            # Concatenar textos (eliminar vací­os y duplicados)
             benefits_list = [str(b).strip() for b in project_responses[benefits_col] if str(b).strip() and str(b) != 'nan']
             problems_list = [str(p).strip() for p in project_responses[problems_col] if str(p).strip() and str(p) != 'nan']
             
@@ -156,12 +156,12 @@ class FeedbackProcessor:
         # Hay tracking existente, promediar con datos nuevos
         latest_tracking = existing_trackings[-1]
         
-        # Promediar satisfacciÃ³n
+        # Promediar satisfacción
         existing_satisfaction = latest_tracking.get('user_satisfaction_score', 0)
         new_satisfaction = new_data['user_satisfaction_score']
         avg_satisfaction = (existing_satisfaction + new_satisfaction) / 2
         
-        # Para tiempo de reducciÃ³n, tomar el nuevo (mÃ¡s actualizado)
+        # Para tiempo de reducción, tomar el nuevo (más actualizado)
         time_reduction = new_data['time_reduction_percent']
         
         # Concatenar textos
@@ -189,7 +189,7 @@ class FeedbackProcessor:
         return merged_data
     
     def _combine_texts(self, existing_text, new_text):
-        """Combina textos evitando duplicaciÃ³n"""
+        """Combina textos evitando duplicación"""
         if not existing_text and not new_text:
             return ''
         if not existing_text:
@@ -217,7 +217,7 @@ class FeedbackProcessor:
             # Combinar con tracking existente si existe
             merged_data = self.merge_with_existing_tracking(project_id, feedback_data)
             
-            # Calcular tiempo real basado en porcentaje de reducciÃ³n
+            # Calcular tiempo real basado en porcentaje de reducción
             original_time = project['current_time_per_task']
             time_reduction_percent = merged_data['time_reduction_percent']
             actual_time_per_task = original_time * (1 - time_reduction_percent / 100)
@@ -259,7 +259,7 @@ class FeedbackProcessor:
                 project_id = response[project_id_col]
                 # Marcar todas las respuestas de este proyecto como procesadas
                 mask = df_updated[project_id_col] == project_id
-                df_updated.loc[mask, processed_col] = 'SÃ­'
+                df_updated.loc[mask, processed_col] = 'Sí­'
             
             # Guardar archivo actualizado si se proporciona ruta
             if file_path:
@@ -295,7 +295,7 @@ class FeedbackProcessor:
             df_clean = self.clean_and_validate_data(df_original)
             if df_clean is None:
                 results['success'] = False
-                results['errors'].append("Error en validaciÃ³n de datos")
+                results['errors'].append("Error en validación de datos")
                 return results
             
             # Obtener respuestas no procesadas
@@ -369,7 +369,7 @@ def render_feedback_processor():
                     st.write(f"**{t('feedback_total_responses')}** {len(df_preview)}")
                     st.dataframe(df_preview.head(), use_container_width=True)
             
-            # BotÃ³n de procesamiento
+            # Botón de procesamiento
             if st.button(t("feedback_process_btn"), type="primary"):
                 with st.spinner(t("feedback_processing_spinner")):
                     results = processor.process_feedback_file(uploaded_file)
@@ -442,9 +442,9 @@ def render_feedback_processor():
                 projects_with_tracking.append({
                     'ID': project['id'],
                     'Nombre': project['name'],
-                    'SatisfacciÃ³n': f"{latest.get('user_satisfaction_score', 0)}/10",
-                    'AdopciÃ³n': f"{latest.get('adoption_rate', 0)}%",
-                    'Ãšltima ActualizaciÃ³n': latest.get('tracking_date', '')[:10] if latest.get('tracking_date') else 'N/A'
+                    'Satisfacción': f"{latest.get('user_satisfaction_score', 0)}/10",
+                    'Adopción': f"{latest.get('adoption_rate', 0)}%",
+                    'Última Actualización': latest.get('tracking_date', '')[:10] if latest.get('tracking_date') else 'N/A'
                 })
         
         if projects_with_tracking:

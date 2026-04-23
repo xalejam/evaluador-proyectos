@@ -1,6 +1,6 @@
 ﻿# tracking.py
 """
-MÃ³dulo de seguimiento post-implementaciÃ³n con procesamiento automÃ¡tico de encuestas
+Módulo de seguimiento post-implementación con procesamiento automático de encuestas
 """
 
 import streamlit as st
@@ -11,7 +11,7 @@ from ui.tabs.shared import t
 from ui.tabs.feedback_processor import FeedbackProcessor
 
 def auto_process_feedback():
-    """Procesa automÃ¡ticamente el archivo de encuesta en la misma carpeta"""
+    """Procesa automáticamente el archivo de encuesta en la misma carpeta"""
     try:
         # Nombre fijo del archivo de encuesta
         feedback_file = "encuesta_feedback.xlsx"  # Cambia este nombre si es diferente
@@ -22,7 +22,7 @@ def auto_process_feedback():
         # Verificar que tiene las columnas correctas
         try:
             df = pd.read_excel(feedback_file)
-            required_cols = ['ID DEL PROYECTO', 'Â¿QuÃ© tan satisfecho/a estÃ¡s con la nueva herramienta?']
+            required_cols = ['ID DEL PROYECTO', 'Â¿Qué tan satisfecho/a estás con la nueva herramienta?']
             if not all(col in df.columns for col in required_cols):
                 return None, f"{t('tracking_feedback_missing_columns')} {feedback_file}"
         except Exception as e:
@@ -48,21 +48,21 @@ def auto_process_feedback():
         return None, f"{t('tracking_auto_process_error')}: {str(e)}"
 
 def get_tracking_source(project_id):
-    """Determina si el tracking es manual o automÃ¡tico (de encuesta)"""
+    """Determina si el tracking es manual o automático (de encuesta)"""
     trackings = st.session_state.excel_manager.get_project_tracking(project_id)
     if not trackings:
         return t("tracking_source_no_tracking"), ""
     
     latest = trackings[-1]
     
-    # Si tiene datos tÃ­picos de encuesta automÃ¡tica
+    # Si tiene datos tÃ­picos de encuesta automática
     has_satisfaction = latest.get('user_satisfaction_score', 0) > 0
     has_feedback_text = bool(
         latest.get('unexpected_benefits', '').strip() or 
         latest.get('challenges_faced', '').strip()
     )
     
-    # Si tiene satisfacciÃ³n > 0 Y textos de feedback, probablemente es automÃ¡tico
+    # Si tiene satisfacción > 0 Y textos de feedback, probablemente es automático
     if has_satisfaction and has_feedback_text:
         return t("tracking_source_auto_survey"), "success"
     elif has_satisfaction or latest.get('actual_time_per_task', 0) > 0:
@@ -71,14 +71,14 @@ def get_tracking_source(project_id):
         return t("tracking_source_no_data"), "warning"
 
 def render_tracking_tab():
-    """Renderiza tab de seguimiento con procesamiento automÃ¡tico"""
+    """Renderiza tab de seguimiento con procesamiento automático"""
     st.header(t('tracking_tab'))
     
-    # Procesamiento automÃ¡tico al inicio
+    # Procesamiento automático al inicio
     with st.spinner(t("tracking_spinner_search_feedback")):
         processed_projects, message = auto_process_feedback()
     
-    # Mostrar resultado del procesamiento automÃ¡tico
+    # Mostrar resultado del procesamiento automático
     if processed_projects:
         st.success(message)
         
@@ -105,7 +105,7 @@ def render_tracking_tab():
         st.warning(t('tracking_no_implemented_warning'))
         return
     
-    # Agregar informaciÃ³n de fuente en el selector
+    # Agregar información de fuente en el selector
     project_options = {}
     for p in projects:
         source, _ = get_tracking_source(p['id'])
@@ -130,7 +130,7 @@ def render_tracking_tab():
     with col1:
         st.subheader(t('tracking_data'))
         
-        # Nota sobre el tipo de actualizaciÃ³n
+        # Nota sobre el tipo de actualización
         if source_type == "success":
             st.info(t("tracking_auto_data_info"))
         else:
@@ -182,7 +182,7 @@ def render_tracking_tab():
             placeholder=t('lessons_placeholder')
         )
         
-        # BotÃ³n con texto dinÃ¡mico
+        # Botón con texto dinámico
         button_text = t("tracking_update_btn") if source_type == "success" else t('save_tracking_btn')
         
         if st.button(button_text, type="primary"):
@@ -240,7 +240,7 @@ def render_tracking_tab():
             fig_perf.update_layout(height=250)
             st.plotly_chart(fig_perf, use_container_width=True)
             
-            # Mensaje de interpretaciÃ³n
+            # Mensaje de interpretación
             performance = latest['performance_score']
             if performance >= 80:
                 st.success(t('excellent_performance'))
@@ -251,7 +251,7 @@ def render_tracking_tab():
             else:
                 st.error(t('low_performance'))
             
-            # MÃ©tricas principales
+            # Métricas principales
             col2_1, col2_2 = st.columns(2)
             with col2_1:
                 st.metric(t("tracking_efficiency_label"), f"{latest['efficiency_ratio']}x")
@@ -261,7 +261,7 @@ def render_tracking_tab():
                 st.metric(t('real_savings_month'), f"${latest['actual_monthly_savings']:,.0f}")
                 st.metric(t('user_satisfaction'), f"{latest['user_satisfaction_score']:.1f}/10")
             
-            # ComparaciÃ³n esperado vs real
+            # Comparación esperado vs real
             st.subheader(t('expected_vs_real'))
             
             expected_monthly_savings = (project['current_time_per_task'] * 
@@ -279,7 +279,7 @@ def render_tracking_tab():
                 st.metric(t('real_reduction'), f"{latest['actual_time_reduction_percent']}%")
                 st.metric(t('real_savings_month'), f"${latest['actual_monthly_savings']:,.0f}")
             
-            # Eficiencia del proyecto con interpretaciÃ³n
+            # Eficiencia del proyecto con interpretación
             efficiency = latest['efficiency_ratio']
             if efficiency >= 1.2:
                 efficiency_text = t('exceeded_significantly')
@@ -300,7 +300,7 @@ def render_tracking_tab():
                 help=efficiency_text
             )
             
-            # AnÃ¡lisis cualitativo si existe
+            # Análisis cualitativo si existe
             if any([latest.get('unexpected_benefits'), latest.get('challenges_faced'), latest.get('lessons_learned')]):
                 st.subheader(t("tracking_qualitative_analysis"))
                 
@@ -345,12 +345,12 @@ def render_tracking_tab():
         else:
             st.info(t("tracking_no_tracking_for_project"))
             
-            # Mostrar informaciÃ³n del proyecto seleccionado
+            # Mostrar información del proyecto seleccionado
             st.subheader(t("tracking_project_info_title"))
             st.write(f"**{t('project_name')}:** {project['name']}")
             st.write(f"**Score de Viabilidad:** {project['viability_score']}/100")
             st.write(f"**{t('priority')}:** {project['priority']}")
-            st.write(f"**ReducciÃ³n Esperada:** {project['time_reduction_percent']}%")
+            st.write(f"**Reducción Esperada:** {project['time_reduction_percent']}%")
             st.write(f"**{t('monthly_savings')} Proyectado:** ${project['monthly_savings']:,.0f}")
             
             if source_type == "warning":
@@ -358,7 +358,7 @@ def render_tracking_tab():
             else:
                 st.info(t("tracking_fill_form_hint"))# tracking.py
 """
-MÃ³dulo de seguimiento post-implementaciÃ³n
+Módulo de seguimiento post-implementación
 """
 
 import streamlit as st
@@ -482,7 +482,7 @@ def render_tracking_tab():
             fig_perf.update_layout(height=250)
             st.plotly_chart(fig_perf, use_container_width=True)
             
-            # Mensaje de interpretaciÃ³n
+            # Mensaje de interpretación
             performance = latest['performance_score']
             if performance >= 80:
                 st.success(t('excellent_performance'))
@@ -493,7 +493,7 @@ def render_tracking_tab():
             else:
                 st.error(t('low_performance'))
             
-            # MÃ©tricas principales
+            # Métricas principales
             col2_1, col2_2 = st.columns(2)
             with col2_1:
                 st.metric(t("tracking_efficiency_label"), f"{latest['efficiency_ratio']}x")
@@ -503,7 +503,7 @@ def render_tracking_tab():
                 st.metric(t('real_savings_month'), f"${latest['actual_monthly_savings']:,.0f}")
                 st.metric(t('user_satisfaction'), f"{latest['user_satisfaction_score']:.1f}/10")
             
-            # ComparaciÃ³n esperado vs real
+            # Comparación esperado vs real
             st.subheader(t('expected_vs_real'))
             
             expected_monthly_savings = (project['current_time_per_task'] * 
@@ -521,7 +521,7 @@ def render_tracking_tab():
                 st.metric(t('real_reduction'), f"{latest['actual_time_reduction_percent']}%")
                 st.metric(t('real_savings_month'), f"${latest['actual_monthly_savings']:,.0f}")
             
-            # Eficiencia del proyecto con interpretaciÃ³n
+            # Eficiencia del proyecto con interpretación
             efficiency = latest['efficiency_ratio']
             if efficiency >= 1.2:
                 efficiency_text = t('exceeded_significantly')
@@ -542,7 +542,7 @@ def render_tracking_tab():
                 help=efficiency_text
             )
             
-            # AnÃ¡lisis cualitativo si existe
+            # Análisis cualitativo si existe
             if any([latest.get('unexpected_benefits'), latest.get('challenges_faced'), latest.get('lessons_learned')]):
                 st.subheader(t("tracking_qualitative_analysis"))
                 
@@ -587,12 +587,12 @@ def render_tracking_tab():
         else:
             st.info(t("tracking_no_tracking_for_project"))
             
-            # Mostrar informaciÃ³n del proyecto seleccionado
+            # Mostrar información del proyecto seleccionado
             st.subheader(t("tracking_project_info_title"))
             st.write(f"**{t('project_name')}:** {project['name']}")
             st.write(f"**Score de Viabilidad:** {project['viability_score']}/100")
             st.write(f"**{t('priority')}:** {project['priority']}")
-            st.write(f"**ReducciÃ³n Esperada:** {project['time_reduction_percent']}%")
+            st.write(f"**Reducción Esperada:** {project['time_reduction_percent']}%")
             st.write(f"**{t('monthly_savings')} Proyectado:** ${project['monthly_savings']:,.0f}")
 
             st.info(t("tracking_fill_form_hint"))

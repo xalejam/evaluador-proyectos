@@ -1,0 +1,15 @@
+{
+  "local_base_path": "C:/Users/ttMonroyX/Kantar/DDP Developers - Proyectos",
+  "subfolders": [
+    "0_documentación",
+    "1_Inputs",
+    "2_Outputs",
+    "3_Repositorio",
+    "4_Evidencias"
+  ],
+  "color_rules": {
+    "blue": ["agente", "agent", "ia", "ai", "inteligencia artificial", "ml", "machine learning", "bot", "llm", "gpt", "copilot", "openai", "anthropic"],
+    "green": ["vba", "macro", "excel vba", "visual basic"]
+  },
+  "color_default": "yellow"
+}

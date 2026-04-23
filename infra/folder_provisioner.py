@@ -26,7 +26,10 @@ class FolderProvisionResult:
 
 
 def detect_color(name: str, description: str, config: dict) -> FolderColor:
-    """Detecta el color de carpeta según palabras clave en nombre y descripción."""
+    """Detecta el color de carpeta según palabras clave en nombre y descripción.
+
+    Prioridad: blue > green > yellow (default).
+    """
     text = f"{name} {description}".lower()
     rules: dict = config.get("color_rules", {})
     for keyword in rules.get("blue", []):
@@ -78,13 +81,20 @@ class LocalFolderProvisioner(FolderProvisioner):
             )
 
 
+_COLOR_INDEX = {
+    FolderColor.BLUE: 4,
+    FolderColor.GREEN: 3,
+    FolderColor.YELLOW: 5,
+}
+
+
 def _apply_folder_color(folder_path: Path, color: FolderColor) -> None:
-    """Aplica color a la carpeta via desktop.ini (solo Windows; falla silenciosamente en otros OS)."""
-    _COLOR_INDEX = {
-        FolderColor.BLUE: 4,
-        FolderColor.GREEN: 3,
-        FolderColor.YELLOW: 5,
-    }
+    """Intenta asignar color via desktop.ini (best-effort, solo Windows).
+
+    Usa IconIndex en [.ShellClassInfo] — puede no reflejarse visualmente
+    en todos los entornos. En fase cloud, SharePoint Graph API maneja colores.
+    Falla silenciosamente si no hay permisos o no es Windows.
+    """
     try:
         import ctypes
         ini_path = folder_path / "desktop.ini"
@@ -108,6 +118,10 @@ def _apply_folder_color(folder_path: Path, color: FolderColor) -> None:
 
 def load_provisioner_from_config(config_path: str = "config/folder_provisioner_config.json") -> FolderProvisioner:
     """Factory: carga config y retorna el provisioner adecuado (local por ahora)."""
-    with open(config_path, encoding="utf-8") as f:
+    resolved = Path(config_path)
+    if not resolved.is_absolute():
+        # Resolver relativo al root del proyecto (dos niveles arriba de infra/)
+        resolved = Path(__file__).parent.parent / config_path
+    with open(resolved, encoding="utf-8") as f:
         cfg = json.load(f)
     return LocalFolderProvisioner(cfg)

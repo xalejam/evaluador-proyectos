@@ -1,6 +1,6 @@
 ﻿# planning.py
 """
-MÃ³dulo de planificaciÃ³n de proyectos con botones separados de Calcular y Guardar
+Módulo de planificación de proyectos con botones separados de Calcular y Guardar
 """
 
 import streamlit as st
@@ -14,6 +14,7 @@ from infra.db import SessionLocal, init_db
 from infra.repositories import ProjectRepository, EvaluationRepository
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
+from infra.folder_provisioner import load_provisioner_from_config
 
 
 def _clamp_score(value: int) -> int:
@@ -34,7 +35,7 @@ def _score_from_thresholds(value: float, thresholds: list[float]) -> int:
 
 
 def _derive_matrix_answers(project_data: dict, results: dict) -> dict[str, int]:
-    """Mapea campos de PlanificaciÃ³n a criterios A-H de Use Case Matrix."""
+    """Mapea campos de Planificación a criterios A-H de Use Case Matrix."""
     staff = float(project_data.get('staff_count', 1) or 1)
     tasks = float(project_data.get('tasks_per_month', 0) or 0)
     reduction = float(project_data.get('time_reduction_percent', 0) or 0)
@@ -48,7 +49,7 @@ def _derive_matrix_answers(project_data: dict, results: dict) -> dict[str, int]:
         "B": _score_from_thresholds(staff, [1, 2, 4, 7]),             # Alcance (proxy)
         "C": _score_from_thresholds(tasks, [5, 20, 50, 100]),         # Frecuencia/volumen
         "D": _score_from_thresholds(annual_savings, [1000, 5000, 20000, 100000]),  # Valor negocio
-        "E": _clamp_score(complexity),                                 # Complejidad tÃ©cnica
+        "E": _clamp_score(complexity),                                 # Complejidad técnica
         "F": _score_from_thresholds(dev_hours, [20, 80, 160, 320]),   # Integraciones (proxy)
         "G": _clamp_score(risk),                                       # Dependencias/riesgo
         "H": _score_from_thresholds(staff, [2, 5, 10, 20]),           # Change management (proxy)
@@ -57,7 +58,7 @@ def _derive_matrix_answers(project_data: dict, results: dict) -> dict[str, int]:
 
 
 def sync_to_use_case_matrix(project_id: str, project_data: dict, results: dict):
-    """Sincroniza proyecto/evaluaciÃ³n de PlanificaciÃ³n hacia Use Case Matrix."""
+    """Sincroniza proyecto/evaluación de Planificación hacia Use Case Matrix."""
     init_db()
     cfg = ConfigLoader().load()
     default_weights = cfg.get("default_weights", {k: 1.0 for k in "ABCDEFGH"})
@@ -259,7 +260,7 @@ def render_planning_tab():
     """Renderiza tab de viabilidad (v2 con acciones separadas)."""
     st.header(t("viability_tab"))
 
-    # Migraciones idempotentes al abrir pestaÃ±a
+    # Migraciones idempotentes al abrir pestaña
     with get_conn() as conn:
         ensure_projects_schema(conn)
         ensure_evaluations_schema(conn)
@@ -632,6 +633,31 @@ def render_planning_tab():
                     }
                     msg = t("project_approved_sent_to_agenda") if approve_click else t("evaluation_saved_msg")
                     st.success(f"{msg} ID: {project_id}")
+
+                    if approve_click:
+                        try:
+                            provisioner = load_provisioner_from_config()
+                            prov_result = provisioner.provision(
+                                project_id=project_id,
+                                project_name=calc_inputs.get("name", ""),
+                                description=calc_inputs.get("description", ""),
+                            )
+                            if prov_result.success:
+                                st.info(
+                                    t("folder_provisioned_ok").format(
+                                        path=prov_result.folder_path,
+                                        color=prov_result.color.value,
+                                    )
+                                )
+                            else:
+                                st.warning(
+                                    t("folder_provisioned_warning").format(
+                                        error=prov_result.error
+                                    )
+                                )
+                        except Exception as prov_exc:
+                            st.warning(t("folder_provisioned_warning").format(error=str(prov_exc)))
+
                     st.rerun()
                 except Exception as exc:
                     st.error(f"{t('error_occurred')}: {exc}")

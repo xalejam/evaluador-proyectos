@@ -90,7 +90,7 @@ roi_first_year          = (annual_savings - initial_dev_cost - maintenance_month
 |-------|--------|------------------|
 | Calcular | Solo muestra resultados en UI, no persiste | — |
 | Guardar Evaluación | Persiste + snapshot + sync a matriz | Elegido por usuario |
-| Aprobar → Agenda | Persiste + snapshot; fuerza `approved` salvo si ya estaba en executing/implemented/handed_off | `approved` |
+| Aprobar → Agenda | Persiste + snapshot; fuerza `approved` salvo si ya estaba en executing/implemented/handed_off. **Además dispara el aprovisionamiento de carpeta de SharePoint.** | `approved` |
 
 ### Generación de project_id
 ```
@@ -98,6 +98,38 @@ format: {COUNTRY}-{OWNER}-{NNNN}
 example: MX-CARLOS-0007
 ```
 Generado por `ProjectViabilityCalculator.create_project()` en `shared.py`.
+
+### 4.4 Aprovisionamiento de carpeta de proyecto (al Aprobar)
+
+Al hacer clic en **Aprobar → Agenda**, se crea automáticamente una carpeta en la ruta local de SharePoint sincronizado.
+
+**Ruta base:** `C:\Users\ttMonroyX\Kantar\DDP Developers - Proyectos`
+**Nombre de carpeta:** `{project_id} {nombre_proyecto}` — ej: `LA-DDD-0001 Agente Titulador`
+
+**Detección de color por palabras clave** (en nombre + descripción del proyecto):
+
+| Color | Keywords |
+|-------|----------|
+| Azul | agente, agent, ia, ai, inteligencia artificial, ml, machine learning, bot, llm, gpt, copilot, openai, anthropic |
+| Verde | vba, macro, excel vba, visual basic |
+| Amarillo | (default — sin keywords) |
+
+**Subcarpetas creadas dentro:**
+```
+0_Documentación
+1_Inputs
+2_Outputs
+3_Repositorio
+4_Evidencias
+```
+
+**Comportamiento ante fallos:** Si la carpeta no se puede crear (ruta inaccesible, permisos), se muestra `st.warning` pero el proyecto queda aprobado correctamente. No bloquea el flujo.
+
+**Configuración:** `config/folder_provisioner_config.json` — permite ajustar ruta base, subcarpetas y keywords sin tocar código.
+
+**Módulo:** `infra/folder_provisioner.py` — interfaz abstracta `FolderProvisioner` preparada para migración a SharePoint Online (Graph API) en fase 2.
+
+---
 
 ### Sincronización automática a Use Case Matrix
 Al guardar/aprobar → `sync_to_use_case_matrix()`:
@@ -132,6 +164,7 @@ H (change mgmt):       staff_count → thresholds [2, 5, 10, 20]
    - Persiste en DB + inserta snapshot en `project_evaluations`
    - Sincroniza a Use Case Matrix
    - Muestra éxito con Project ID
+   - Si es **Aprobar**: aprovisiona carpeta de proyecto en SharePoint local (ver sección 4.4)
 8. Columna derecha: gauge + métricas + recomendación
 
 ---
@@ -200,6 +233,7 @@ AVG(avg_salary_per_hour) FROM projects
 | `infra.db.connection.get_sqlite_conn` | Conexión a `project_viability.db` |
 | `ui.tabs.shared.ProjectViabilityCalculator` | Cálculos financieros y persistencia legacy |
 | `ui.tabs.shared.ExcelSharePointManager` | Acceso a proyectos via session_state |
+| `infra.folder_provisioner.load_provisioner_from_config` | Crea carpeta de proyecto al aprobar |
 
 ### DB
 - `project_viability.db` (fuente principal)
@@ -261,6 +295,7 @@ Output: score = 20 + 12 + 14 = 46/100 → prioridad "Media"
 | 2026-01 | Separación de botones Calcular / Guardar | Xiomara |
 | 2026-02 | Sincronización automática a Use Case Matrix | Xiomara |
 | 2026-03 | Agrega `project_evaluations` snapshot + developer_team | Xiomara |
+| 2026-04 | Aprovisionamiento automático de carpeta SharePoint local al aprobar | Xiomara |
 
 ---
 

@@ -347,20 +347,29 @@ def build_slide(
     _draw_footer(slide, generated_at)
 
 
-def build_presentation(projects: list[ProjectStatus], output_path: Path) -> Path:
+def _build_prs(projects: list[ProjectStatus]) -> Presentation:
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
-
     chunks = [projects[i:i + ROWS_PER_SLIDE] for i in range(0, len(projects), ROWS_PER_SLIDE)]
     generated_at = datetime.now().strftime("%d/%m/%Y %H:%M")
-
     for n, chunk in enumerate(chunks, start=1):
         build_slide(prs, chunk, n, len(chunks), projects, generated_at)
+    return prs
 
+
+def build_presentation(projects: list[ProjectStatus], output_path: Path) -> Path:
+    prs = _build_prs(projects)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(output_path)
     return output_path
+
+
+def build_presentation_bytes(projects: list[ProjectStatus]) -> bytes:
+    from io import BytesIO
+    buf = BytesIO()
+    _build_prs(projects).save(buf)
+    return buf.getvalue()
 
 
 def main() -> None:

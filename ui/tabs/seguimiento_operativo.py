@@ -19,6 +19,7 @@ import pandas as pd
 import streamlit as st
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.db.migrations import ensure_schema
+from infra.presentation_ports import SqliteDataSource, InMemoryDestination, build_presentation_bytes as _build_pptx_bytes
 from ui.tabs.shared import t
 from ui.i18n_labels import label_note_type, label_status
 
@@ -1244,6 +1245,35 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
     summary_view = summary_view[desired_order]
 
     _export_buttons(summary_view, prefix="resumen_ejecutivo", label_suffix=t("ops_executive_summary"))
+
+    # --- Botón generación de presentación ---
+    _, col_pptx = st.columns([5, 1])
+    with col_pptx:
+        gen_btn = st.button(
+            "📊 Generar presentación",
+            key="btn_gen_pptx_exec",
+            use_container_width=True,
+        )
+
+    if gen_btn:
+        with st.spinner("Generando Resumen_Proyectos_Ejecucion.pptx..."):
+            try:
+                projects = SqliteDataSource().fetch_projects()
+                if not projects:
+                    st.warning("No hay proyectos en ejecución para incluir en la presentación.")
+                else:
+                    data = InMemoryDestination().save(_build_pptx_bytes(projects))
+                    filename = f"Resumen_Proyectos_Ejecucion_{date.today()}.pptx"
+                    st.download_button(
+                        label=f"⬇ Descargar {filename}",
+                        data=data,
+                        file_name=filename,
+                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                        key="dl_pptx_exec",
+                    )
+            except Exception as exc:
+                st.error(f"Error al generar la presentación: {exc}")
+    # --- fin botón presentación ---
 
     st.dataframe(
         summary_view,

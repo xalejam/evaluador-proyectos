@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Iterable
 
@@ -366,7 +367,6 @@ def build_presentation(projects: list[ProjectStatus], output_path: Path) -> Path
 
 
 def build_presentation_bytes(projects: list[ProjectStatus]) -> bytes:
-    from io import BytesIO
     buf = BytesIO()
     _build_prs(projects).save(buf)
     return buf.getvalue()

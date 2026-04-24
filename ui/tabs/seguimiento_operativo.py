@@ -1268,12 +1268,13 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
                 else:
                     data = InMemoryDestination().save(_build_pptx_bytes(projects))
                     filename = f"Resumen_Proyectos_Ejecucion_{date.today()}.pptx"
+                    # When a cloud destination returns a str URL, add isinstance(data, bytes) dispatch here.
                     st.download_button(
                         label=f"⬇ Descargar {filename}",
                         data=data,
                         file_name=filename,
                         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        key="dl_pptx_exec",
+                        key=f"dl_pptx_exec_{filename}",
                     )
             except Exception as exc:
                 st.error(f"Error al generar la presentación: {exc}")

@@ -44,7 +44,7 @@ class SqliteDataSource:
     """Fuente de datos local: lee proyectos en ejecución de SQLite."""
 
     def __init__(self, db_path: Path = DB_PATH) -> None:
-        self._db_path = db_path
+        self._db_path = Path(db_path).resolve()
 
     def fetch_projects(self) -> list[ProjectStatus]:
         return fetch_executing_projects(self._db_path)

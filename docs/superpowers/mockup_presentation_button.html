@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Mockup — Botón Presentación</title>
+<style>
+  body { font-family: sans-serif; background: #f0f2f6; margin: 0; padding: 20px; }
+  .app { max-width: 1100px; margin: auto; background: white; border-radius: 10px; padding: 24px; box-shadow: 0 2px 8px #0001; }
+  h2 { color: #1a1a2e; margin-top: 0; }
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e8f0; margin-bottom: 20px; }
+  .tab { padding: 10px 24px; cursor: pointer; color: #64748b; border-bottom: 3px solid transparent; margin-bottom: -2px; font-size: 14px; }
+  .tab.active { color: #ff4b4b; border-bottom: 3px solid #ff4b4b; font-weight: 600; }
+  .filters { display: flex; gap: 12px; margin-bottom: 16px; }
+  .filter-box { flex: 1; }
+  .filter-box label { display: block; font-size: 12px; color: #64748b; margin-bottom: 4px; }
+  .filter-box input, .filter-box select { width: 100%; padding: 6px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; box-sizing: border-box; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 16px; }
+  th { background: #f8fafc; color: #475569; text-align: left; padding: 8px 12px; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; color: #1e293b; }
+  tr:hover td { background: #f8fafc; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-yellow { background: #fef9c3; color: #854d0e; }
+  .badge-blue { background: #dbeafe; color: #1e40af; }
+  .export-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+  .btn { padding: 7px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: all .15s; }
+  .btn-outline { background: white; border: 1px solid #e2e8f0; color: #374151; }
+  .btn-outline:hover { background: #f8fafc; border-color: #cbd5e1; }
+  .btn-primary { background: #ff4b4b; color: white; }
+  .btn-primary:hover { background: #e03e3e; }
+  .btn-pptx { background: #c13b1b; color: white; display: flex; align-items: center; gap: 6px; }
+  .btn-pptx:hover { background: #a83217; }
+  .spacer { flex: 1; }
+  .divider { border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }
+  .download-area { display: none; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; align-items: center; gap: 12px; margin-top: 12px; }
+  .download-area.visible { display: flex; }
+  .download-area span { color: #166534; font-size: 13px; font-weight: 500; }
+  .btn-download { background: #16a34a; color: white; display: flex; align-items: center; gap: 6px; }
+  .btn-download:hover { background: #15803d; }
+  .spinner { display: none; align-items: center; gap: 8px; color: #64748b; font-size: 13px; }
+  .spinner.visible { display: flex; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spin-icon { width: 16px; height: 16px; border: 2px solid #e2e8f0; border-top-color: #ff4b4b; border-radius: 50%; animation: spin .7s linear infinite; }
+  .section-title { font-weight: 600; color: #1e293b; font-size: 14px; margin-bottom: 8px; }
+  .note { font-size: 11px; color: #94a3b8; margin-top: 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <h2>📋 Seguimiento Operativo</h2>
+
+  <div class="tabs">
+    <div class="tab">Captura Rápida</div>
+    <div class="tab active">Resumen Ejecutivo</div>
+    <div class="tab">Historial / Timeline</div>
+  </div>
+
+  <h3 style="margin-top:0;color:#1e293b;font-size:16px;">Resumen Ejecutivo</h3>
+
+  <div class="filters">
+    <div class="filter-box" style="flex:2">
+      <label>Estados</label>
+      <select><option>executing, in_agenda</option></select>
+    </div>
+    <div class="filter-box" style="flex:2">
+      <label>Buscar</label>
+      <input type="text" placeholder="Texto libre...">
+    </div>
+    <div class="filter-box" style="flex:1">
+      <label>Días sin actualización</label>
+      <input type="number" value="0">
+    </div>
+  </div>
+
+  <!-- Fila de exportación — ESTADO ACTUAL (sin botón pptx) -->
+  <div style="margin-bottom:8px">
+    <p class="section-title" style="color:#64748b;font-size:12px;font-weight:400;">Estado actual de los botones de exportación:</p>
+    <div class="export-row" style="border:1px dashed #e2e8f0;padding:10px;border-radius:8px;background:#fafafa;">
+      <button class="btn btn-outline">⬇ Exportar CSV</button>
+      <button class="btn btn-outline">⬇ Exportar JSON</button>
+      <span style="font-size:12px;color:#94a3b8;margin-left:8px;">← solo estos dos hoy</span>
+    </div>
+  </div>
+
+  <!-- Fila de exportación — DESPUÉS del cambio -->
+  <div style="margin-bottom:16px">
+    <p class="section-title" style="color:#16a34a;font-size:12px;font-weight:400;">✅ Después del cambio (nuevo botón agregado):</p>
+    <div class="export-row" style="border:1px solid #bbf7d0;padding:10px;border-radius:8px;background:#f0fdf4;">
+      <button class="btn btn-outline">⬇ Exportar CSV</button>
+      <button class="btn btn-outline">⬇ Exportar JSON</button>
+      <div class="spacer"></div>
+      <button class="btn btn-pptx" onclick="simulateGenerate()">
+        📊 Generar presentación
+      </button>
+    </div>
+
+    <!-- Spinner (aparece al generar) -->
+    <div class="spinner" id="spinner" style="margin-top:10px;padding-left:4px;">
+      <div class="spin-icon"></div>
+      Generando Resumen_Proyectos_Ejecucion.pptx...
+    </div>
+
+    <!-- Área de descarga (aparece tras generar) -->
+    <div class="download-area" id="downloadArea">
+      <span>✅ Presentación lista —</span>
+      <button class="btn btn-download">⬇ Descargar Resumen_Proyectos_Ejecucion_2026-04-23.pptx</button>
+    </div>
+    <p class="note" id="downloadNote" style="display:none">El archivo se genera en memoria — no se guarda en disco hasta que descargues.</p>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Proyecto</th>
+        <th>% Avance</th>
+        <th>Días sin actualizar</th>
+        <th>Tendencia</th>
+        <th>Última nota</th>
+        <th>Loop</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>LA-COPILOT-001 Implementacion de Copilot</td>
+        <td><span class="badge badge-yellow">18%</span></td>
+        <td>13</td>
+        <td>↑</td>
+        <td>Se presentan avances: +30 agentes y feedback del leadership...</td>
+        <td><a href="#" style="color:#3b82f6;font-size:12px;">🔗 Loop</a></td>
+      </tr>
+      <tr>
+        <td>MX-XIO-0002 Automatización Reportes</td>
+        <td><span class="badge badge-green">65%</span></td>
+        <td>5</td>
+        <td>↑</td>
+        <td>Entrega de módulo de validación completado...</td>
+        <td><a href="#" style="color:#3b82f6;font-size:12px;">🔗 Loop</a></td>
+      </tr>
+      <tr>
+        <td>BR-ANL-003 Dashboard Ejecutivo</td>
+        <td><span class="badge badge-blue">42%</span></td>
+        <td>21</td>
+        <td>→</td>
+        <td>Sin actualización reciente...</td>
+        <td><a href="#" style="color:#3b82f6;font-size:12px;">🔗 Loop</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+  <div class="section-title">Comparativo de avance por proyecto</div>
+  <div style="background:#f8fafc;border-radius:8px;height:120px;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;">
+    [ Gráfico de líneas — sin cambios ]
+  </div>
+</div>
+
+<script>
+function simulateGenerate() {
+  const spinner = document.getElementById('spinner');
+  const downloadArea = document.getElementById('downloadArea');
+  const downloadNote = document.getElementById('downloadNote');
+  spinner.classList.add('visible');
+  downloadArea.classList.remove('visible');
+  downloadNote.style.display = 'none';
+  setTimeout(() => {
+    spinner.classList.remove('visible');
+    downloadArea.classList.add('visible');
+    downloadNote.style.display = 'block';
+  }, 1800);
+}
+</script>
+</body>
+</html>

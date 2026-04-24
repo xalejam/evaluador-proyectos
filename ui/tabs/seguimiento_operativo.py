@@ -19,7 +19,11 @@ import pandas as pd
 import streamlit as st
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.db.migrations import ensure_schema
-from infra.presentation_ports import SqliteDataSource, InMemoryDestination, build_presentation_bytes as _build_pptx_bytes
+from infra.presentation_ports import (
+    InMemoryDestination,
+    SqliteDataSource,
+    build_presentation_bytes as _build_pptx_bytes,
+)
 from ui.tabs.shared import t
 from ui.i18n_labels import label_note_type, label_status
 

@@ -14,7 +14,7 @@ from pptx.enum.text import PP_ALIGN
 from pptx.util import Inches, Pt
 
 
-DB_PATH = Path("project_viability.db")
+DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
 OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
 LOGO_PATH = Path("logo_DDNola.png")
 

@@ -11,13 +11,13 @@ from ui.tabs.shared import (
     render_sidebar_stats
 )
 from ui.state import init_state
-from ui.tabs.viabilidad_tab import render_viabilidad_tab
-from ui.tabs.post_impl_tab import render_post_impl_tab
-from ui.tabs.dashboard_tab import render_dashboard_tab
-from ui.tabs.feedback_tab import render_feedback_tab
-from ui.tabs.sql_tab import render_sql_tab
-from ui.tabs.use_case_matrix_tab import render_use_case_matrix_tab
-from ui.tabs.seguimiento_operativo_tab import render_seguimiento_operativo_tab
+from ui.tabs.planning import render_planning_tab as render_viabilidad_tab
+from ui.tabs.tracking import render_tracking_tab as render_post_impl_tab
+from ui.tabs.dashboard import render_dashboard as render_dashboard_tab
+from ui.tabs.feedback_processor import render_feedback_processor as render_feedback_tab
+from ui.tabs.sql_queries import render_sql_queries_tab as render_sql_tab
+from ui.use_case_matrix import render_use_case_matrix_tab
+from ui.tabs.seguimiento_operativo import render_seguimiento_operativo as render_seguimiento_operativo_tab
 
 ROOT = Path(__file__).resolve().parent
 

@@ -143,7 +143,7 @@ class ProjectRepository:
         teams: list[str] | None = None,
         statuses: list[str] | None = None,
         search: str | None = None,
-    ):
+    ) -> list[dict[str, Any]]:
         rows = self.list_projects(year=year, teams=teams, statuses=statuses, search=search)
         for row in rows:
             row.setdefault("loop_url", "")
@@ -160,7 +160,7 @@ class ProjectRepository:
         teams: list[str] | None = None,
         statuses: list[str] | None = None,
         search: str | None = None,
-    ):
+    ) -> list[dict[str, Any]]:
         sql = "SELECT * FROM projects WHERE 1=1"
         params: list[Any] = []
         if statuses:

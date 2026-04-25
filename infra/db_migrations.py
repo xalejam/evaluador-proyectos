@@ -26,7 +26,7 @@ def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
     if not _table_exists(conn, table_name):
         return set()
     rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
-    return {row["name"] for row in rows}
+    return {row[1] for row in rows}
 
 
 def _add_column_if_missing(conn: sqlite3.Connection, table: str, column_def: str) -> None:
@@ -144,13 +144,28 @@ def ensure_evaluations_schema(conn: sqlite3.Connection) -> None:
             payback_period_months REAL,
             roi_first_year REAL,
             hours_saved_per_month REAL,
-            inputs_json TEXT
+            inputs_json TEXT,
+            answers_json TEXT,
+            weights_json TEXT,
+            impact_score REAL,
+            effort_score REAL,
+            is_current INTEGER NOT NULL DEFAULT 0
         )
         """
     )
+    # Idempotent migrations for DBs created before consolidation
+    _add_column_if_missing(conn, "project_evaluations", "answers_json TEXT")
+    _add_column_if_missing(conn, "project_evaluations", "weights_json TEXT")
+    _add_column_if_missing(conn, "project_evaluations", "impact_score REAL")
+    _add_column_if_missing(conn, "project_evaluations", "effort_score REAL")
+    _add_column_if_missing(conn, "project_evaluations", "is_current INTEGER NOT NULL DEFAULT 0")
     _ensure_index(
         conn,
         "CREATE INDEX IF NOT EXISTS idx_eval_project_time ON project_evaluations(project_id, created_at)",
+    )
+    _ensure_index(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_eval_current ON project_evaluations(project_id, is_current)",
     )
     conn.commit()
 

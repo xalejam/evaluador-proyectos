@@ -1,11 +1,8 @@
 ﻿"""UI de la pestana Use Case Matrix (vista de portafolio/priorizacion).
 
-Flujo actual:
-- La fuente de verdad para metadata/estado es `project_viability.db` (tabla `projects`).
-- Los scores Impact/Effort se leen de `data/projects.db` (tabla `evaluations`, current).
-- Esta vista NO crea proyectos ni captura evaluaciones; solo consume persistidos.
-- La persistencia de estado desde esta vista actualiza `project_viability.db` y, si existe
-  columna espejo en `data/projects.db.projects`, tambien la actualiza para consistencia.
+Fuente única de verdad: project_viability.db.
+- Metadata/estado: tabla `projects`.
+- Scores Impact/Effort: tabla `project_evaluations` (columnas impact_score, effort_score, is_current=1).
 """
 
 from __future__ import annotations
@@ -21,10 +18,8 @@ import streamlit as st
 
 from domain.matrix import classify_quadrant
 from infra.config_loader import ConfigLoader
-from infra.db import DB_PATH as UCM_DB_PATH
-from infra.db import init_db
 from infra.db.connection import get_sqlite_conn as get_conn
-from infra.db.migrations import ensure_projects_schema
+from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
 from ui.tabs.shared import t
 from ui.i18n_labels import label_status
 
@@ -41,12 +36,6 @@ VALID_STATUSES = (
     "handed_off",
 )
 VALID_TEAMS = ("NOLA", "Brazil", "Champions", "Other")
-
-
-def _get_ucm_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(UCM_DB_PATH.as_posix())
-    conn.row_factory = sqlite3.Row
-    return conn
 
 
 def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
@@ -71,44 +60,25 @@ def _add_column_if_missing(conn: sqlite3.Connection, table: str, column_def: str
 
 
 def ensure_matrix_schema() -> None:
-    """Migraciones idempotentes para la fuente consumida por matriz."""
-    # Fuente de verdad portfolio
     with get_conn(PV_DB_PATH) as conn:
         ensure_projects_schema(conn)
+        ensure_evaluations_schema(conn)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_project_id ON projects(project_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at)")
         conn.commit()
 
-    # Espejo (opcional) para mantener consistencia visual/historica en data/projects.db
-    init_db()
-    with _get_ucm_conn() as conn:
-        if _table_exists(conn, "projects"):
-            _add_column_if_missing(conn, "projects", "status TEXT")
-            _add_column_if_missing(conn, "projects", "delivery_team TEXT")
-            _add_column_if_missing(conn, "projects", "loop_url TEXT")
-            _add_column_if_missing(conn, "projects", "year INTEGER")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ucm_projects_status ON projects(status)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ucm_projects_year ON projects(year)")
-            conn.commit()
-
 
 def _load_current_scores_df() -> pd.DataFrame:
-    with _get_ucm_conn() as conn:
-        if not _table_exists(conn, "evaluations"):
+    with get_conn(PV_DB_PATH) as conn:
+        if not _table_exists(conn, "project_evaluations"):
             return pd.DataFrame(columns=["project_id", "impact_score", "effort_score", "eval_created_at"])
         sql = """
-            SELECT e.project_id, e.impact_score, e.effort_score, e.created_at AS eval_created_at
-            FROM evaluations e
-            JOIN (
-                SELECT project_id, MAX(created_at) AS max_created_at
-                FROM evaluations
-                WHERE is_current = 1
-                GROUP BY project_id
-            ) curr
-              ON curr.project_id = e.project_id
-             AND curr.max_created_at = e.created_at
-            WHERE e.is_current = 1
+            SELECT project_id, impact_score, effort_score, created_at AS eval_created_at
+            FROM project_evaluations
+            WHERE is_current = 1
+              AND impact_score IS NOT NULL
+              AND effort_score IS NOT NULL
         """
         return pd.read_sql_query(sql, conn)
 
@@ -186,23 +156,12 @@ def _export_buttons(df: pd.DataFrame, prefix: str) -> None:
 
 
 def update_status(project_id: str, new_status: str) -> None:
-    """Actualiza estado en source of truth y espejo opcional."""
     with get_conn(PV_DB_PATH) as conn:
         conn.execute(
-            """
-            UPDATE projects
-            SET status = ?, updated_at = datetime('now')
-            WHERE id = ? OR project_id = ?
-            """,
+            "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ? OR project_id = ?",
             (new_status, project_id, project_id),
         )
         conn.commit()
-
-    # Espejo opcional
-    with _get_ucm_conn() as conn:
-        if _table_exists(conn, "projects") and "status" in _table_columns(conn, "projects"):
-            conn.execute("UPDATE projects SET status = ? WHERE project_id = ?", (new_status, project_id))
-            conn.commit()
 
 
 def _render_scatter(df: pd.DataFrame, threshold_impact: float, threshold_effort: float) -> None:

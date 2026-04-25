@@ -6,6 +6,7 @@ from typing import Any
 
 import streamlit as st
 
+from domain.exceptions import ValidationError
 from infra.db.connection import get_sqlite_conn
 from infra.db.migrations import ensure_schema
 from infra.db.repositories.evaluation_repo import EvaluationRepository
@@ -65,7 +66,7 @@ class ViabilityService:
         delivery_team: str | None = None,
     ) -> str:
         if not (loop_url or "").strip():
-            raise ValueError("loop_url es obligatorio para aprobar")
+            raise ValidationError("loop_url", "es obligatorio para aprobar")
 
         if project_id and st.session_state.excel_manager.project_exists(project_id):
             final_project_id, calc_results = st.session_state.calculator.update_project(project_id, inputs)

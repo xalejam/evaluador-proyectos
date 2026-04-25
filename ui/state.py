@@ -6,10 +6,12 @@ import streamlit as st
 
 
 DEFAULTS = {
+    "language": "es",
     "edit_mode": False,
     "selected_project_id": None,
     "temp_calculation": None,
     "latest_results": None,
+    "active_tab": 0,
 }
 
 

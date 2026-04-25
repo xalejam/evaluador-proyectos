@@ -16,10 +16,11 @@ import json
 import re
 
 # =============================================================================
-# TRADUCCIONES / TRANSLATIONS
+# TRADUCCIONES / TRANSLATIONS — re-exported from ui.i18n (source of truth)
 # =============================================================================
+from ui.i18n import TRANSLATIONS, t, get_language  # noqa: F401, E402
 
-TRANSLATIONS = {
+_TRANSLATIONS_LEGACY = {
     'es': {
         # Header y navegación
         'page_title': 'Evaluador de Viabilidad - Proyectos IA/Automatización',
@@ -993,21 +994,7 @@ TRANSLATIONS = {
     }
 }
 
-# =============================================================================
-# FUNCIONES DE TRADUCCIÓN
-# =============================================================================
-
-def get_language():
-    """Obtiene el idioma actual de session_state"""
-    if 'language' not in st.session_state:
-        st.session_state.language = 'es'
-    return st.session_state.language
-
-def t(key, lang=None):
-    """Función de traducción"""
-    if lang is None:
-        lang = get_language()
-    return TRANSLATIONS.get(lang, {}).get(key, key)
+# t(), get_language(), TRANSLATIONS — imported from ui.i18n above
 
 def get_scale_salary(scale_level):
     """Convierte scale level a salario por hora (INTERNO - no visible)"""

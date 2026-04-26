@@ -18,6 +18,8 @@ from ui.tabs.feedback_processor import render_feedback_processor as render_feedb
 from ui.tabs.sql_queries import render_sql_queries_tab as render_sql_tab
 from ui.use_case_matrix import render_use_case_matrix_tab
 from ui.tabs.seguimiento_operativo import render_seguimiento_operativo as render_seguimiento_operativo_tab
+from infra.db_migrations import ensure_all_operational_schema
+from infra.db.connection import get_sqlite_conn, DB_PATH
 
 ROOT = Path(__file__).resolve().parent
 
@@ -34,6 +36,10 @@ def main():
     # Inicializar sistema
     init_state()
     init_excel_manager()
+
+    with get_sqlite_conn(DB_PATH) as conn:
+        ensure_all_operational_schema(conn)
+        conn.commit()
 
     # Logo arriba a la izquierda (sidebar)
     logo_path = ROOT / "assets_images" / "logo_DDNola.png"

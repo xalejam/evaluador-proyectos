@@ -113,7 +113,7 @@ def calculate_average_hourly_rate():
 
 EVALUATION_SAVE_STATUSES = ("evaluated", "backlog", "on_hold", "rejected", "handed_off")
 _app_config = _load_app_config()
-DEVELOPER_TEAMS = tuple(_app_config.get("delivery_teams", ["NOLA", "Brazil", "Champions", "Other"]))
+DEVELOPER_TEAMS = tuple(_app_config.get("delivery_teams", []))
 
 
 def _impact_points(time_reduction: float) -> float:
@@ -267,7 +267,7 @@ def render_planning_tab():
         ensure_evaluations_schema(conn)
 
     config = ConfigLoader().load()
-    default_countries = ["MX", "BR", "CO", "AR", "CL", "PE", "EC", "UY", "BO", "SOLA", "NOLA", "HISPANIC", "LATAM"]
+    default_countries = ["MX", "BR", "CO", "AR", "CL", "PE", "EC", "UY", "BO", "NOLA", "HISPANIC", "LATAM"]
     configured_countries = config.get("countries", [])
     if configured_countries:
         # Mantiene lo definido en config y agrega faltantes de la lista base sin duplicar.

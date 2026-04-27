@@ -70,19 +70,20 @@ class OperationalTrackingService:
                 delta_last = int(curr) - int(prev)
         return {"history": history, "last_three": last_three, "delta_last": delta_last}
 
-    def calculate_auto_progress(self, estimated_end_date: str | None) -> int | None:
-        if not estimated_end_date:
-            return None
-        try:
-            end_dt = datetime.strptime(estimated_end_date, "%Y-%m-%d").date()
-        except ValueError:
-            return None
+    def calculate_auto_progress(
+        self,
+        start_dt,
+        end_dt,
+    ) -> int:
         today = date.today()
         if end_dt <= today:
             return 100
-        # Asuncion pragmatica: ventana lineal de 120 dias hacia la fecha objetivo.
-        total_days = 120
-        elapsed = total_days - (end_dt - today).days
+        if start_dt is None or start_dt >= today:
+            return 0
+        total_days = (end_dt - start_dt).days
+        if total_days <= 0:
+            return 100
+        elapsed = (today - start_dt).days
         return max(0, min(100, int(round((elapsed / total_days) * 100))))
 
     def get_executive_summary(self, filters: dict[str, Any]) -> pd.DataFrame:

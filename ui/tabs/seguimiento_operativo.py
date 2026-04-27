@@ -597,14 +597,21 @@ def _days_since(dt_str: str | None) -> int | None:
         return None
 
 
-def calculate_auto_progress(estimated_end_date: date | None) -> int | None:
+def calculate_auto_progress(
+    estimated_end_date: date | None,
+    start_date: date | None = None,
+) -> int | None:
     if not estimated_end_date:
         return None
     today = date.today()
     if estimated_end_date <= today:
         return 100
-    total_days = 120
-    elapsed = total_days - (estimated_end_date - today).days
+    if start_date is None or start_date >= today:
+        return 0
+    total_days = (estimated_end_date - start_date).days
+    if total_days <= 0:
+        return 100
+    elapsed = (today - start_date).days
     return max(0, min(100, int(round((elapsed / total_days) * 100))))
 
 

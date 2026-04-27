@@ -2,6 +2,16 @@
 from __future__ import annotations
 
 
+def _f(value, default: float = 0.0) -> float:
+    """Coerce value to float, returning default when value is None or unconvertible."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _t(key: str) -> str:
     try:
         from ui.tabs.shared import t  # type: ignore[import]
@@ -14,27 +24,22 @@ class ProjectViabilityCalculator:
     """Calculates project viability score and financial projections."""
 
     def calculate_viability(self, project_data: dict) -> dict:
-        total_hours_per_month = (
-            project_data["current_time_per_task"]
-            * project_data["tasks_per_month"]
-            * project_data["staff_count"]
-        )
-        time_saved = (
-            project_data["current_time_per_task"]
-            * project_data["time_reduction_percent"]
-            / 100
-        )
-        hours_saved_per_month = (
-            time_saved
-            * project_data["tasks_per_month"]
-            * project_data["staff_count"]
-        )
-        monthly_savings = hours_saved_per_month * project_data["avg_salary_per_hour"]
+        current_time = _f(project_data.get("current_time_per_task"))
+        tasks_per_month = _f(project_data.get("tasks_per_month"))
+        staff_count = _f(project_data.get("staff_count"))
+        time_reduction_pct = _f(project_data.get("time_reduction_percent"))
+        avg_salary = _f(project_data.get("avg_salary_per_hour"))
+        dev_hours = _f(project_data.get("development_hours"))
+        dev_cost_per_hour = _f(project_data.get("development_cost_per_hour"))
+        maintenance_monthly = _f(project_data.get("maintenance_monthly"))
+
+        total_hours_per_month = current_time * tasks_per_month * staff_count
+        time_saved = current_time * time_reduction_pct / 100
+        hours_saved_per_month = time_saved * tasks_per_month * staff_count
+        monthly_savings = hours_saved_per_month * avg_salary
         annual_savings = monthly_savings * 12
-        initial_development_cost = (
-            project_data["development_hours"] * project_data["development_cost_per_hour"]
-        )
-        annual_maintenance_cost = project_data["maintenance_monthly"] * 12
+        initial_development_cost = dev_hours * dev_cost_per_hour
+        annual_maintenance_cost = maintenance_monthly * 12
         net_annual_benefit = annual_savings - annual_maintenance_cost
 
         if net_annual_benefit > 0:
@@ -51,7 +56,7 @@ class ProjectViabilityCalculator:
 
         viability_score = 0
 
-        time_reduction = project_data["time_reduction_percent"]
+        time_reduction = time_reduction_pct
         if time_reduction >= 70:
             viability_score += 35
         elif time_reduction >= 50:
@@ -65,11 +70,13 @@ class ProjectViabilityCalculator:
         else:
             viability_score += max(0, time_reduction * 0.5)
 
-        risk_level = project_data["risk_level"]
+        risk_level_raw = project_data.get("risk_level")
+        risk_level = int(risk_level_raw) if risk_level_raw is not None else None
         risk_points = {1: 30, 2: 24, 3: 18, 4: 12, 5: 6}
         viability_score += risk_points.get(risk_level, 6)
 
-        complexity_level = project_data["implementation_complexity"]
+        complexity_raw = project_data.get("implementation_complexity")
+        complexity_level = int(complexity_raw) if complexity_raw is not None else None
         complexity_points = {1: 35, 2: 28, 3: 21, 4: 14, 5: 7}
         viability_score += complexity_points.get(complexity_level, 7)
 
@@ -99,32 +106,33 @@ class ProjectViabilityCalculator:
         }
 
     def calculate_tracking_results(self, project_data: dict, tracking_data: dict) -> dict:
-        expected_time_after = project_data["current_time_per_task"] * (
-            1 - project_data["time_reduction_percent"] / 100
-        )
-        expected_savings_per_task = project_data["current_time_per_task"] - expected_time_after
-        actual_savings_per_task = (
-            project_data["current_time_per_task"] - tracking_data["actual_time_per_task"]
-        )
+        current_time = _f(project_data.get("current_time_per_task"))
+        time_reduction_pct = _f(project_data.get("time_reduction_percent"))
+        staff_count = _f(project_data.get("staff_count"))
+        avg_salary = _f(project_data.get("avg_salary_per_hour"))
+        actual_time = _f(tracking_data.get("actual_time_per_task"))
+        actual_tasks = _f(tracking_data.get("actual_tasks_per_month"))
+        adoption_rate = _f(tracking_data.get("adoption_rate"))
+        satisfaction = _f(tracking_data.get("user_satisfaction_score"))
+
+        expected_time_after = current_time * (1 - time_reduction_pct / 100)
+        expected_savings_per_task = current_time - expected_time_after
+        actual_savings_per_task = current_time - actual_time
 
         if expected_savings_per_task > 0:
             efficiency_ratio = actual_savings_per_task / expected_savings_per_task
         else:
             efficiency_ratio = 0
 
-        if project_data["current_time_per_task"] > 0:
+        if current_time > 0:
             actual_time_reduction_percent = (
-                (project_data["current_time_per_task"] - tracking_data["actual_time_per_task"])
-                / project_data["current_time_per_task"]
+                (current_time - actual_time) / current_time
             ) * 100
         else:
             actual_time_reduction_percent = 0
 
         actual_monthly_savings = (
-            actual_savings_per_task
-            * tracking_data["actual_tasks_per_month"]
-            * project_data["staff_count"]
-            * project_data["avg_salary_per_hour"]
+            actual_savings_per_task * actual_tasks * staff_count * avg_salary
         )
         actual_annual_savings = actual_monthly_savings * 12
 
@@ -141,8 +149,8 @@ class ProjectViabilityCalculator:
         else:
             performance_score = 20
 
-        adoption_adjustment = (tracking_data["adoption_rate"] / 100) * 0.3
-        satisfaction_adjustment = (tracking_data["user_satisfaction_score"] / 10) * 0.2
+        adoption_adjustment = (adoption_rate / 100) * 0.3
+        satisfaction_adjustment = (satisfaction / 10) * 0.2
         performance_score = min(
             100, performance_score * (1 + adoption_adjustment + satisfaction_adjustment)
         )

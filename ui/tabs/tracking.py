@@ -9,6 +9,7 @@ import pandas as pd
 import os
 from ui.tabs.shared import t
 from ui.tabs.feedback_processor import FeedbackProcessor
+from ui.calculator import _f
 
 def auto_process_feedback():
     """Procesa automáticamente el archivo de encuesta en la misma carpeta"""
@@ -146,15 +147,15 @@ def render_tracking_tab():
                 value=0.0, 
                 step=0.1
             )
-            st.caption(f"{t('before_label')}: {project['current_time_per_task']} hrs")
+            st.caption(f"{t('before_label')}: {project.get('current_time_per_task')} hrs")
         
         with col1_2:
             actual_tasks_per_month = st.number_input(
-                t('actual_tasks_month'), 
-                min_value=0, 
-                value=int(project['tasks_per_month'])
+                t('actual_tasks_month'),
+                min_value=0,
+                value=int(_f(project.get('tasks_per_month')))
             )
-            st.caption(f"{t('projected_label')}: {project['tasks_per_month']}")
+            st.caption(f"{t('projected_label')}: {project.get('tasks_per_month')}")
         
         st.subheader(t('adoption_satisfaction'))
         
@@ -264,11 +265,13 @@ def render_tracking_tab():
             # Comparación esperado vs real
             st.subheader(t('expected_vs_real'))
             
-            expected_monthly_savings = (project['current_time_per_task'] * 
-                                      project['time_reduction_percent'] / 100 * 
-                                      project['tasks_per_month'] * 
-                                      project['staff_count'] * 
-                                      project['avg_salary_per_hour'])
+            expected_monthly_savings = (
+                _f(project.get('current_time_per_task'))
+                * _f(project.get('time_reduction_percent')) / 100
+                * _f(project.get('tasks_per_month'))
+                * _f(project.get('staff_count'))
+                * _f(project.get('avg_salary_per_hour'))
+            )
             
             col2_3, col2_4 = st.columns(2)
             with col2_3:

@@ -15,46 +15,11 @@ from infra.repositories import ProjectRepository, EvaluationRepository
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
 from infra.folder_provisioner import load_provisioner_from_config
-
-
-def _clamp_score(value: int) -> int:
-    return max(1, min(5, int(value)))
-
-
-def _score_from_thresholds(value: float, thresholds: list[float]) -> int:
-    """Convierte un valor continuo a score 1-5 usando 4 umbrales ascendentes."""
-    if value <= thresholds[0]:
-        return 1
-    if value <= thresholds[1]:
-        return 2
-    if value <= thresholds[2]:
-        return 3
-    if value <= thresholds[3]:
-        return 4
-    return 5
-
-
-def _derive_matrix_answers(project_data: dict, results: dict) -> dict[str, int]:
-    """Mapea campos de Planificación a criterios A-H de Use Case Matrix."""
-    staff = float(project_data.get('staff_count', 1) or 1)
-    tasks = float(project_data.get('tasks_per_month', 0) or 0)
-    reduction = float(project_data.get('time_reduction_percent', 0) or 0)
-    dev_hours = float(project_data.get('development_hours', 0) or 0)
-    complexity = int(project_data.get('implementation_complexity', 3) or 3)
-    risk = int(project_data.get('risk_level', 3) or 3)
-    annual_savings = float(results.get('annual_savings', 0) or 0)
-
-    answers = {
-        "A": _score_from_thresholds(reduction, [5, 15, 30, 50]),      # Ahorro tiempo
-        "B": _score_from_thresholds(staff, [1, 2, 4, 7]),             # Alcance (proxy)
-        "C": _score_from_thresholds(tasks, [5, 20, 50, 100]),         # Frecuencia/volumen
-        "D": _score_from_thresholds(annual_savings, [1000, 5000, 20000, 100000]),  # Valor negocio
-        "E": _clamp_score(complexity),                                 # Complejidad técnica
-        "F": _score_from_thresholds(dev_hours, [20, 80, 160, 320]),   # Integraciones (proxy)
-        "G": _clamp_score(risk),                                       # Dependencias/riesgo
-        "H": _score_from_thresholds(staff, [2, 5, 10, 20]),           # Change management (proxy)
-    }
-    return answers
+from infra.integrations.use_case_matrix_sync import (
+    clamp_score as _clamp_score,
+    score_from_thresholds as _score_from_thresholds,
+    derive_matrix_answers as _derive_matrix_answers,
+)
 
 
 def sync_to_use_case_matrix(project_id: str, project_data: dict, results: dict):

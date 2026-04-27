@@ -83,3 +83,9 @@ def sync_to_use_case_matrix(
             ),
         )
         conn.commit()
+
+
+# Public aliases for import from other modules
+derive_matrix_answers = _derive_matrix_answers
+score_from_thresholds = _score_from_thresholds
+clamp_score = _clamp_score

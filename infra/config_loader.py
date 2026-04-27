@@ -1,6 +1,7 @@
 """Carga de configuracion para scoring y reglas de ID."""
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,8 @@ try:
 except Exception:  # pragma: no cover - opcional en runtime actual
     yaml = None
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path("config/scoring_config.json")
 DEFAULT_APP_CONFIG_PATH = Path("config/config.yaml")
@@ -30,6 +33,10 @@ def load_app_config(config_path: Path | None = None) -> dict[str, Any]:
     """Carga config central YAML para reglas de negocio transversales."""
     path = config_path or DEFAULT_APP_CONFIG_PATH
     if not path.exists():
+        logger.warning(
+            "config.yaml not found at %s — using empty config. approval_threshold and allowed_statuses will use hardcoded defaults.",
+            path,
+        )
         return {}
     if yaml is None:
         raise RuntimeError("PyYAML no está instalado. Instala dependencias de desarrollo.")

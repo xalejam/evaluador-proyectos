@@ -55,6 +55,11 @@ class LocalFolderProvisioner(FolderProvisioner):
     """Implementación local: crea carpetas en el sistema de archivos."""
 
     def __init__(self, config: dict) -> None:
+        if "local_base_path" not in config:
+            raise KeyError(
+                "'local_base_path' is required in folder_provisioner_config.json but was not found. "
+                f"Keys found: {list(config.keys())}"
+            )
         self._base = Path(config["local_base_path"])
         self._subfolders: list[str] = config.get("subfolders", [])
         self._config = config

@@ -40,7 +40,7 @@ class ProjectViabilityCalculator:
         if net_annual_benefit > 0:
             payback_period_months = initial_development_cost / (net_annual_benefit / 12)
         else:
-            payback_period_months = float("inf")
+            payback_period_months = None
 
         if initial_development_cost > 0:
             roi_first_year = (

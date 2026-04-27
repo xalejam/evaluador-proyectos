@@ -20,7 +20,7 @@ def compute_financials(
     initial_development_cost = development_hours * development_cost_per_hour
     net_annual_benefit = annual_savings - (maintenance_monthly * 12)
 
-    payback_period_months = float("inf")
+    payback_period_months: float | None = None
     if net_annual_benefit > 0:
         payback_period_months = initial_development_cost / (net_annual_benefit / 12)
 

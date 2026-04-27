@@ -204,7 +204,7 @@ def insert_project_evaluation_snapshot(
             complexity_score,
             float(calc_results.get("monthly_savings", 0) or 0),
             float(calc_results.get("annual_savings", 0) or 0),
-            float(calc_results.get("payback_period_months", 0) or 0),
+            calc_results.get("payback_period_months"),
             float(calc_results.get("roi_first_year", 0) or 0),
             float(calc_results.get("hours_saved_per_month", 0) or 0),
             json.dumps(inputs_dict, ensure_ascii=False),

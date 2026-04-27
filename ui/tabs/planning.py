@@ -8,7 +8,7 @@ import plotly.graph_objects as go
 import json
 from ui.tabs.shared import t, get_scale_salary
 from ui.i18n_labels import get_lang, help_statuses, label_status
-from infra.config_loader import ConfigLoader
+from infra.config_loader import ConfigLoader, load_app_config as _load_app_config
 from domain.scoring import calculate_scores
 from infra.db import SessionLocal, init_db
 from infra.repositories import ProjectRepository, EvaluationRepository
@@ -112,7 +112,8 @@ def calculate_average_hourly_rate():
 
 
 EVALUATION_SAVE_STATUSES = ("evaluated", "backlog", "on_hold", "rejected", "handed_off")
-DEVELOPER_TEAMS = ("NOLA", "SOLA", "Brazil", "Other", "Champions Copilot")
+_app_config = _load_app_config()
+DEVELOPER_TEAMS = tuple(_app_config.get("delivery_teams", ["NOLA", "Brazil", "Champions", "Other"]))
 
 
 def _impact_points(time_reduction: float) -> float:

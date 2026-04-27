@@ -7,6 +7,7 @@ from typing import Any
 import streamlit as st
 
 from domain.exceptions import ValidationError
+from infra.config_loader import load_app_config
 from infra.db.connection import get_sqlite_conn
 from infra.db.migrations import ensure_schema
 from infra.db.repositories.evaluation_repo import EvaluationRepository
@@ -65,6 +66,15 @@ class ViabilityService:
         project_id: str | None = None,
         delivery_team: str | None = None,
     ) -> str:
+        config = load_app_config()
+        threshold = config.get("approval_threshold", 80)
+        score = float((calc_results or {}).get("viability_score") or 0)
+        if score < threshold:
+            raise ValidationError(
+                "approval_threshold",
+                f"Project score {score:.1f} is below the approval threshold of {threshold}. The project cannot be approved.",
+            )
+
         if not (loop_url or "").strip():
             raise ValidationError("loop_url", "es obligatorio para aprobar")
 

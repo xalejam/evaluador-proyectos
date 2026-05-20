@@ -11,7 +11,13 @@ from infra.db.migrations import ensure_schema
 
 @pytest.fixture
 def temp_db_path(tmp_path: Path) -> Path:
-    return tmp_path / "test_project_viability.db"
+    from infra.db_migrations import ensure_all_operational_schema
+    db_path = tmp_path / "test_project_viability.db"
+    conn = sqlite3.connect(db_path)
+    ensure_all_operational_schema(conn)
+    conn.commit()
+    conn.close()
+    return db_path
 
 
 @pytest.fixture

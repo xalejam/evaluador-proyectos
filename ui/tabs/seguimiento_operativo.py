@@ -1207,6 +1207,58 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                     st.error(f"{t('ops_save_update_error')}: {exc}")
 
     st.markdown("---")
+
+    if str(selected_project.status or "").lower() == "implemented":
+        st.subheader("Registrar actividad post-cierre")
+        with st.form(key=f"ops_post_closure_form_{selected_project.project_id}", clear_on_submit=True):
+            pc_author = st.text_input(
+                t("ops_author"),
+                value=default_author,
+                key=f"ops_pc_author_{selected_project.project_id}",
+            )
+            pc_text = st.text_area(
+                "Descripción de la actividad",
+                placeholder="¿Qué se hizo? ¿Quién lo solicitó?",
+                height=120,
+                key=f"ops_pc_text_{selected_project.project_id}",
+            )
+            pc_hours = st.number_input(
+                "Horas invertidas",
+                min_value=0.0,
+                max_value=80.0,
+                value=0.0,
+                step=0.5,
+                key=f"ops_pc_hours_{selected_project.project_id}",
+            )
+            pc_submitted = st.form_submit_button("Guardar actividad post-cierre", type="primary")
+
+        if pc_submitted:
+            if not pc_author.strip():
+                st.error(t("ops_author_required"))
+            elif not str(pc_text).strip():
+                st.error("La descripción de la actividad es obligatoria.")
+            elif pc_hours <= 0:
+                st.error("Las horas son obligatorias y deben ser mayores a 0.")
+            else:
+                try:
+                    insert_notes_batch(conn, [{
+                        "project_id": selected_project.project_id,
+                        "note_type": POST_CLOSURE_TYPE,
+                        "note_text": str(pc_text).strip(),
+                        "author": pc_author.strip(),
+                        "tags": "",
+                        "is_private": False,
+                        "entry_group_id": uuid.uuid4().hex,
+                        "note_title": "Post-cierre",
+                        "progress_percent": None,
+                        "estimated_end_date": None,
+                        "effort_hours": pc_hours,
+                    }])
+                    st.success("Actividad post-cierre registrada correctamente.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Error al guardar: {exc}")
+
     _render_last_notes_cards(conn, selected_project.project_id)
 
 def _render_executive_tab(conn: sqlite3.Connection) -> None:

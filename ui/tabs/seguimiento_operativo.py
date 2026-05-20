@@ -630,7 +630,7 @@ def get_workload_df(conn: sqlite3.Connection, statuses: list[str]) -> pd.DataFra
             COALESCE(SUM(pn.effort_hours), 0) AS total_hours
         FROM project_members pm
         JOIN projects p ON p.project_id = pm.project_id
-        LEFT JOIN project_notes pn ON pn.project_id = p.project_id
+        LEFT JOIN project_notes pn ON pn.project_id = p.project_id AND pn.author = pm.member_name
         WHERE p.status IN ({placeholders})
         GROUP BY pm.member_name, p.project_id, p.name, p.status
         ORDER BY pm.member_name, total_hours DESC

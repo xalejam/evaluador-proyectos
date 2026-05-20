@@ -583,6 +583,31 @@ def _latest_project_note(conn: sqlite3.Connection, project_id: str) -> dict[str,
     return dict(row) if row else None
 
 
+def _get_project_hours(conn: sqlite3.Connection, project_id: str) -> dict[str, float]:
+    """Retorna dev_hours y post_hours para un proyecto."""
+    row = conn.execute(
+        """
+        SELECT
+            COALESCE(SUM(CASE
+                WHEN pn.note_type != 'soporte_post_entrega'
+                 AND (p.closed_at IS NULL OR datetime(pn.created_at) <= datetime(p.closed_at))
+                THEN pn.effort_hours ELSE 0
+            END), 0) AS dev_hours,
+            COALESCE(SUM(CASE
+                WHEN pn.note_type = 'soporte_post_entrega'
+                THEN pn.effort_hours ELSE 0
+            END), 0) AS post_hours
+        FROM projects p
+        LEFT JOIN project_notes pn ON pn.project_id = p.project_id
+        WHERE p.project_id = ? OR p.id = ?
+        """,
+        (project_id, project_id),
+    ).fetchone()
+    if row is None:
+        return {"dev_hours": 0.0, "post_hours": 0.0}
+    return {"dev_hours": float(row["dev_hours"]), "post_hours": float(row["post_hours"])}
+
+
 def _days_since(dt_str: str | None) -> int | None:
     if not dt_str:
         return None
@@ -1260,6 +1285,24 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                     st.error(f"Error al guardar: {exc}")
 
     _render_last_notes_cards(conn, selected_project.project_id)
+
+    hours = _get_project_hours(conn, selected_project.project_id)
+    dev_h = hours["dev_hours"]
+    post_h = hours["post_hours"]
+    total_h = dev_h + post_h
+
+    if total_h > 0:
+        st.markdown("---")
+        st.markdown("**Tiempo real**")
+        if post_h > 0:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Horas desarrollo", f"{dev_h:.1f} h")
+            c2.metric("Horas post-cierre", f"{post_h:.1f} h")
+            c3.metric("Total real", f"{total_h:.1f} h")
+        else:
+            c1, c2 = st.columns(2)
+            c1.metric("Horas desarrollo", f"{dev_h:.1f} h")
+            c2.metric("Total real", f"{total_h:.1f} h")
 
 def _render_executive_tab(conn: sqlite3.Connection) -> None:
     st.subheader(t("ops_executive_summary"))

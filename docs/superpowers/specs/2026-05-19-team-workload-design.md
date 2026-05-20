@@ -144,9 +144,19 @@ Xiomara
 
 ---
 
+## Captura de horas con múltiples colaboradores por semana
+
+Cuando en una semana X dos personas trabajan en el mismo proyecto, **cada una captura su propia nota** con sus propias horas usando el campo `author` del formulario. El sistema ya lo soporta — múltiples notas del mismo proyecto con distinto `author` se suman correctamente en el dashboard porque `get_workload_df` agrega por `project_id`, no por `author`.
+
+**Convención del equipo:** cualquier miembro listado en `project_members` puede (y debe) capturar su propia entrada semanal cuando trabaje en ese proyecto, independientemente de quién sea el `owner`.
+
+No se requiere ningún cambio de schema ni de lógica para soportar este caso.
+
+---
+
 ## Lo que NO se incluye (fuera de alcance)
 
 - Roles por miembro (líder, analista, etc.) — no necesario para un equipo de 2-4 personas
-- Distribución matemática de horas entre miembros — la captura es grupal, no individual
+- Distribución matemática de horas entre miembros — la captura es grupal por defecto
 - Autenticación o catálogo de usuarios — nombres libres son suficientes para este contexto
 - Historial de cambios de miembros — `added_at` guarda cuándo se agregó, pero no hay log de eliminaciones

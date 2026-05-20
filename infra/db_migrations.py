@@ -352,6 +352,24 @@ def ensure_notes_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+def update_project_status(conn: sqlite3.Connection, project_id: str, status: str) -> None:
+    conn.execute(
+        "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ? OR project_id = ?",
+        (status.strip(), project_id.strip(), project_id.strip()),
+    )
+    if status.strip() == "implemented":
+        conn.execute(
+            """
+            UPDATE projects
+            SET closed_at = datetime('now')
+            WHERE (id = ? OR project_id = ?)
+              AND (closed_at IS NULL OR closed_at = '')
+            """,
+            (project_id.strip(), project_id.strip()),
+        )
+    conn.commit()
+
+
 def ensure_all_operational_schema(conn: sqlite3.Connection) -> None:
     """Atajo para asegurar esquemas de projects/evaluations/notes."""
     ensure_projects_schema(conn)

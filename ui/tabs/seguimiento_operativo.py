@@ -421,12 +421,8 @@ def _tech_stack_label(code: str) -> str:
     return t(f"tech_stack_{code}")
 
 
-def update_project_status(conn: sqlite3.Connection, project_id: str, status: str) -> None:
-    conn.execute(
-        "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ? OR project_id = ?",
-        (status.strip(), project_id.strip(), project_id.strip()),
-    )
-    conn.commit()
+from infra.db_migrations import update_project_status  # noqa: E402
+
 
 def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) -> list[int]:
     """Inserta lote de notas inmutables. Retorna note_ids insertados."""

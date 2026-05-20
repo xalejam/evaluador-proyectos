@@ -121,6 +121,7 @@ def ensure_projects_schema(conn: sqlite3.Connection) -> None:
         WHERE COALESCE(updated_at, '') = ''
         """
     )
+    _add_column_if_missing(conn, "projects", "closed_at TEXT")
     conn.commit()
 
 
@@ -335,6 +336,7 @@ def ensure_notes_schema(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(conn, "project_notes", "note_title TEXT")
     _add_column_if_missing(conn, "project_notes", "progress_percent INTEGER")
     _add_column_if_missing(conn, "project_notes", "estimated_end_date TEXT")
+    _add_column_if_missing(conn, "project_notes", "effort_hours REAL")
 
     _ensure_index(
         conn,

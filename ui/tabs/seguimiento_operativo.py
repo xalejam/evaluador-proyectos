@@ -608,6 +608,33 @@ def _get_project_hours(conn: sqlite3.Connection, project_id: str) -> dict[str, f
     return {"dev_hours": float(row["dev_hours"]), "post_hours": float(row["post_hours"])}
 
 
+def get_workload_df(conn: sqlite3.Connection, statuses: list[str]) -> pd.DataFrame:
+    """Retorna DataFrame con carga por miembro: member_name, project_id, name, status, total_hours."""
+    if not statuses:
+        return pd.DataFrame(columns=["member_name", "project_id", "name", "status", "total_hours"])
+    placeholders = ",".join(["?"] * len(statuses))
+    rows = conn.execute(
+        f"""
+        SELECT
+            pm.member_name,
+            p.project_id,
+            p.name,
+            p.status,
+            COALESCE(SUM(pn.effort_hours), 0) AS total_hours
+        FROM project_members pm
+        JOIN projects p ON p.project_id = pm.project_id
+        LEFT JOIN project_notes pn ON pn.project_id = p.project_id
+        WHERE p.status IN ({placeholders})
+        GROUP BY pm.member_name, p.project_id, p.name, p.status
+        ORDER BY pm.member_name, total_hours DESC
+        """,
+        statuses,
+    ).fetchall()
+    if not rows:
+        return pd.DataFrame(columns=["member_name", "project_id", "name", "status", "total_hours"])
+    return pd.DataFrame([dict(r) for r in rows])
+
+
 def _days_since(dt_str: str | None) -> int | None:
     if not dt_str:
         return None

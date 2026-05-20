@@ -64,3 +64,60 @@ def test_get_all_known_members_returns_unique_names(conn):
     add_project_member(conn, "P1", "Ana")
     names = get_all_known_members(conn)
     assert sorted(names) == ["Ana", "Xiomara"]
+
+
+import pandas as pd
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+from infra.db_migrations import ensure_notes_schema
+
+
+@pytest.fixture
+def conn_with_data():
+    c = sqlite3.connect(":memory:")
+    c.row_factory = sqlite3.Row
+    ensure_projects_schema(c)
+    ensure_members_schema(c)
+    ensure_notes_schema(c)
+    # Proyectos
+    c.execute("INSERT INTO projects (id, project_id, name, status) VALUES ('P1','P1','Proyecto Alpha','executing')")
+    c.execute("INSERT INTO projects (id, project_id, name, status) VALUES ('P2','P2','Proyecto Beta','executing')")
+    c.execute("INSERT INTO projects (id, project_id, name, status) VALUES ('P3','P3','Proyecto Gamma','approved')")
+    # Miembros
+    c.execute("INSERT INTO project_members (project_id, member_name) VALUES ('P1','Xiomara')")
+    c.execute("INSERT INTO project_members (project_id, member_name) VALUES ('P2','Xiomara')")
+    c.execute("INSERT INTO project_members (project_id, member_name) VALUES ('P1','Ana')")
+    c.execute("INSERT INTO project_members (project_id, member_name) VALUES ('P3','Ana')")
+    # Horas en notas
+    c.execute("INSERT INTO project_notes (project_id, note_text, note_type, author, effort_hours) VALUES ('P1','x','general','Xiomara',10.0)")
+    c.execute("INSERT INTO project_notes (project_id, note_text, note_type, author, effort_hours) VALUES ('P1','x','general','Xiomara',5.0)")
+    c.execute("INSERT INTO project_notes (project_id, note_text, note_type, author, effort_hours) VALUES ('P2','x','general','Xiomara',20.0)")
+    c.commit()
+    yield c
+    c.close()
+
+
+def test_workload_df_sums_hours_per_project(conn_with_data):
+    from ui.tabs.seguimiento_operativo import get_workload_df
+    df = get_workload_df(conn_with_data, statuses=["executing", "approved"])
+    p1_xiomara = df[(df["member_name"] == "Xiomara") & (df["project_id"] == "P1")]
+    assert len(p1_xiomara) == 1
+    assert p1_xiomara.iloc[0]["total_hours"] == 15.0
+
+
+def test_workload_df_empty_when_no_members(conn_with_data):
+    from ui.tabs.seguimiento_operativo import get_workload_df
+    # Proyecto sin miembros
+    conn_with_data.execute("INSERT INTO projects (id, project_id, name, status) VALUES ('P9','P9','Sin miembros','executing')")
+    conn_with_data.commit()
+    df = get_workload_df(conn_with_data, statuses=["executing"])
+    # P9 no debe aparecer (no tiene miembros)
+    assert "P9" not in df["project_id"].values
+
+
+def test_workload_df_filters_by_status(conn_with_data):
+    from ui.tabs.seguimiento_operativo import get_workload_df
+    df = get_workload_df(conn_with_data, statuses=["executing"])
+    # P3 es 'approved', no debe aparecer
+    assert "P3" not in df["project_id"].values

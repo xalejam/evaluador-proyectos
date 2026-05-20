@@ -1395,6 +1395,34 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             c1.metric("Horas desarrollo", f"{dev_h:.1f} h")
             c2.metric("Total real", f"{total_h:.1f} h")
 
+def _render_workload_section(conn: sqlite3.Connection, statuses: list[str]) -> None:
+    """Renderiza el bloque Carga del equipo al final del tab ejecutivo."""
+    st.markdown("---")
+    st.subheader("Carga del equipo")
+
+    df = get_workload_df(conn, statuses=statuses)
+
+    if df.empty:
+        st.info("Aún no hay miembros asignados a proyectos.")
+        return
+
+    for member_name, group in df.groupby("member_name"):
+        active_count = len(group)
+        total_hours = group["total_hours"].sum()
+
+        st.markdown(f"#### {member_name}")
+        c1, c2 = st.columns(2)
+        c1.metric("Proyectos activos", active_count)
+        c2.metric("Horas acumuladas", f"{total_hours:.1f} h")
+
+        display = group[["name", "status", "total_hours"]].copy()
+        display.columns = ["Proyecto", "Status", "Horas"]
+        display["Horas"] = display["Horas"].apply(lambda h: f"{h:.1f} h")
+        display["Status"] = display["Status"].apply(label_status)
+        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.divider()
+
+
 def _render_executive_tab(conn: sqlite3.Connection) -> None:
     st.subheader(t("ops_executive_summary"))
 
@@ -1526,6 +1554,8 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
             y_label=t("ops_progress_percent_label"),
             use_container_width=True,
         )
+
+    _render_workload_section(conn, statuses=status_filter if status_filter else list(ONGOING_STATUSES))
 
 
 def _render_cards(df: pd.DataFrame) -> None:

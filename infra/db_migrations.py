@@ -370,8 +370,64 @@ def update_project_status(conn: sqlite3.Connection, project_id: str, status: str
     conn.commit()
 
 
+def ensure_members_schema(conn: sqlite3.Connection) -> None:
+    """Crea tabla project_members si no existe."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_members (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            member_name TEXT NOT NULL,
+            added_at TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(project_id, member_name)
+        )
+        """
+    )
+    _ensure_index(
+        conn,
+        "CREATE INDEX IF NOT EXISTS idx_project_members_pid ON project_members(project_id)",
+    )
+    conn.commit()
+
+
+def get_project_members(conn: sqlite3.Connection, project_id: str) -> list[str]:
+    """Retorna lista de nombres de miembros para un proyecto."""
+    rows = conn.execute(
+        "SELECT member_name FROM project_members WHERE project_id = ? ORDER BY added_at",
+        (project_id,),
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
+def add_project_member(conn: sqlite3.Connection, project_id: str, member_name: str) -> None:
+    """Agrega un miembro a un proyecto. Ignora duplicados silenciosamente."""
+    conn.execute(
+        "INSERT OR IGNORE INTO project_members (project_id, member_name) VALUES (?, ?)",
+        (project_id.strip(), member_name.strip()),
+    )
+    conn.commit()
+
+
+def remove_project_member(conn: sqlite3.Connection, project_id: str, member_name: str) -> None:
+    """Elimina un miembro de un proyecto."""
+    conn.execute(
+        "DELETE FROM project_members WHERE project_id = ? AND member_name = ?",
+        (project_id.strip(), member_name.strip()),
+    )
+    conn.commit()
+
+
+def get_all_known_members(conn: sqlite3.Connection) -> list[str]:
+    """Retorna todos los nombres de miembros únicos en toda la BD (para sugerencias)."""
+    rows = conn.execute(
+        "SELECT DISTINCT member_name FROM project_members ORDER BY member_name"
+    ).fetchall()
+    return [r[0] for r in rows]
+
+
 def ensure_all_operational_schema(conn: sqlite3.Connection) -> None:
     """Atajo para asegurar esquemas de projects/evaluations/notes."""
     ensure_projects_schema(conn)
     ensure_evaluations_schema(conn)
     ensure_notes_schema(conn)
+    ensure_members_schema(conn)

@@ -36,6 +36,7 @@ ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder"
 TECH_STACK_OPTIONS = ("python", "vba", "powerbi", "agent", "other")
 START_EXECUTION_STATUSES = ("evaluated", "approved", "in_agenda")
 END_MARKER = "/end"
+POST_CLOSURE_TYPE = "soporte_post_entrega"
 
 def _note_type_help() -> dict[str, str]:
     return {
@@ -438,7 +439,9 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
             raise ValueError("progress_percent debe ser entero entre 0 y 100.")
         if progress_percent is not None and not (0 <= progress_percent <= 100):
             raise ValueError("progress_percent debe estar entre 0 y 100.")
-        if note_type not in NOTE_TYPES or not note_text or not author:
+        if note_type not in NOTE_TYPES and note_type != POST_CLOSURE_TYPE:
+            continue
+        if not note_text or not author:
             continue
         cleaned.append(
             (
@@ -452,6 +455,7 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
                 str(note.get("note_title", "")).strip(),
                 progress_percent,
                 str(note.get("estimated_end_date", "")).strip() or None,
+                note.get("effort_hours"),
             )
         )
 
@@ -461,11 +465,9 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
     conn.executemany(
         """
         INSERT INTO project_notes
-            (
-                project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
-                progress_percent, estimated_end_date
-            )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
+             progress_percent, estimated_end_date, effort_hours)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         cleaned,
     )
@@ -1098,6 +1100,15 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             if suggested_progress is not None:
                 st.caption(f"{t('ops_progress_suggested')}: {suggested_progress}%")
 
+        effort_hours_input = st.number_input(
+            "Horas invertidas esta semana",
+            min_value=0.0,
+            max_value=80.0,
+            value=0.0,
+            step=0.5,
+            key=f"ops_effort_hours_{selected_project.project_id}",
+        )
+
         general = st.text_area(
             label_note_type("general"),
             placeholder=note_help["general"],
@@ -1138,6 +1149,8 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             st.error(t("ops_author_required"))
         elif not loop_url_input.strip():
             st.error(t("ops_loop_required_to_save"))
+        elif effort_hours_input <= 0:
+            st.error("Las horas invertidas son obligatorias y deben ser mayores a 0.")
         else:
             entry_group_id = uuid.uuid4().hex
             progress_percent_value = int(progress_percent_input) if enable_progress_capture else None
@@ -1164,6 +1177,7 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                             "note_title": "",
                             "progress_percent": progress_percent_value,
                             "estimated_end_date": estimated_end_date_value,
+                            "effort_hours": effort_hours_input if ntype == "general" else None,
                         }
                     )
 

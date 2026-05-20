@@ -321,8 +321,6 @@ def render_use_case_matrix_tab() -> None:
         "owner",
         "country",
         "status",
-        "delivery_team_display",
-        "delivery_team",
         "year",
         "score_total",
         "impact_score",
@@ -331,7 +329,24 @@ def render_use_case_matrix_tab() -> None:
         "updated_at",
     ]
     export_df = filtered[[c for c in export_cols if c in filtered.columns]].copy()
-    if "delivery_team_display" in export_df.columns:
-        export_df = export_df.rename(columns={"delivery_team_display": "delivery_team_label"})
+    export_df["quadrant"] = export_df.apply(
+        lambda r: classify_quadrant(float(r["impact_score"]), float(r["effort_score"]), threshold_impact, threshold_effort)
+        if pd.notna(r.get("impact_score")) and pd.notna(r.get("effort_score"))
+        else "N/D",
+        axis=1,
+    )
+    col_order = [c for c in ["project_id", "name", "owner", "country", "status", "year", "score_total", "impact_score", "effort_score", "quadrant", "loop_url", "updated_at"] if c in export_df.columns]
+    export_df = export_df[col_order]
     st.dataframe(export_df, use_container_width=True, hide_index=True)
     _export_buttons(export_df, prefix="use_case_matrix_filtrado")
+
+    st.markdown("""
+**Guía de cuadrantes** *(threshold impact & effort = 3.5)*
+
+| Cuadrante | Impact | Effort | Qué significa |
+|---|---|---|---|
+| **Quick Win** | Alto ≥ 3.5 | Bajo < 3.5 | Alto valor, bajo costo — priorizar primero |
+| **Strategic Bet** | Alto ≥ 3.5 | Alto ≥ 3.5 | Alto valor pero costoso — planificar con recursos adecuados |
+| **Tactical Improvement** | Bajo < 3.5 | Bajo < 3.5 | Valor moderado, bajo costo — ejecutar si hay capacidad |
+| **Future Consideration** | Bajo < 3.5 | Alto ≥ 3.5 | Poco valor y costoso — deprioritizar o descartar |
+""")

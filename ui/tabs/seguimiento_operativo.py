@@ -422,7 +422,14 @@ def _tech_stack_label(code: str) -> str:
     return t(f"tech_stack_{code}")
 
 
-from infra.db_migrations import update_project_status  # noqa: E402
+from infra.db_migrations import (  # noqa: E402
+    update_project_status,
+    get_project_members,
+    add_project_member,
+    remove_project_member,
+    get_all_known_members,
+    ensure_members_schema,
+)
 
 
 def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) -> list[int]:
@@ -633,6 +640,61 @@ def get_workload_df(conn: sqlite3.Connection, statuses: list[str]) -> pd.DataFra
     if not rows:
         return pd.DataFrame(columns=["member_name", "project_id", "name", "status", "total_hours"])
     return pd.DataFrame([dict(r) for r in rows])
+
+
+def _render_members_section(conn: sqlite3.Connection, project_id: str) -> None:
+    """Sección colapsable para gestionar miembros del equipo de un proyecto."""
+    with st.expander("Equipo del proyecto", expanded=False):
+        members = get_project_members(conn, project_id)
+        all_known = get_all_known_members(conn)
+
+        if members:
+            st.markdown("**Miembros actuales:**")
+            for member in members:
+                col_name, col_btn = st.columns([4, 1])
+                col_name.write(member)
+                confirm_key = f"ops_confirm_remove_{project_id}_{member}"
+                if col_btn.button("✕", key=f"ops_remove_{project_id}_{member}", help=f"Eliminar {member}"):
+                    st.session_state[confirm_key] = True
+                if st.session_state.get(confirm_key):
+                    st.warning(f"¿Eliminar a **{member}** de este proyecto?")
+                    c1, c2 = st.columns(2)
+                    if c1.button("Confirmar", key=f"ops_confirm_yes_{project_id}_{member}", type="primary"):
+                        remove_project_member(conn, project_id, member)
+                        st.session_state.pop(confirm_key, None)
+                        st.rerun()
+                    if c2.button("Cancelar", key=f"ops_confirm_no_{project_id}_{member}"):
+                        st.session_state.pop(confirm_key, None)
+                        st.rerun()
+        else:
+            st.caption("Sin miembros asignados aún.")
+
+        st.markdown("**Agregar miembro:**")
+        suggestions = ["Nuevo..."] + [n for n in all_known if n not in members]
+        selected = st.selectbox(
+            "Seleccionar o escribir",
+            options=suggestions,
+            key=f"ops_member_select_{project_id}",
+            label_visibility="collapsed",
+        )
+        new_name_input = ""
+        if selected == "Nuevo...":
+            new_name_input = st.text_input(
+                "Nombre del nuevo miembro",
+                key=f"ops_member_new_{project_id}",
+                placeholder="Ej. Carlos",
+            )
+        name_to_add = new_name_input.strip() if selected == "Nuevo..." else selected
+
+        if st.button("+ Agregar", key=f"ops_member_add_{project_id}"):
+            if not name_to_add:
+                st.error("El nombre no puede estar vacío.")
+            elif name_to_add in members:
+                st.warning(f"{name_to_add} ya es miembro de este proyecto.")
+            else:
+                add_project_member(conn, project_id, name_to_add)
+                st.success(f"{name_to_add} agregado al equipo.")
+                st.rerun()
 
 
 def _days_since(dt_str: str | None) -> int | None:
@@ -1114,6 +1176,8 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                 except Exception as exc:
                     st.error(f"{t('ops_link_save_error')}: {exc}")
 
+    _render_members_section(conn, selected_project.project_id)
+
     default_author = str(st.session_state.get("author", st.session_state.get("current_user", "Xiomara Monroy")))
     note_help = _note_type_help()
     note_example = _note_type_example()
@@ -1567,6 +1631,7 @@ def render_seguimiento_operativo() -> None:
     try:
         with get_conn(DB_PATH) as conn:
             ensure_schema(conn)
+            ensure_members_schema(conn)
     except Exception as exc:
         st.error(f"{t('ops_schema_init_error')}: {exc}")
         return

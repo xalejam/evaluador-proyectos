@@ -9,58 +9,15 @@ import json
 from ui.tabs.shared import t, get_scale_salary
 from ui.i18n_labels import get_lang, help_statuses, label_status
 from infra.config_loader import ConfigLoader, load_app_config as _load_app_config
-from domain.scoring import calculate_scores
-from infra.db import SessionLocal, init_db
-from infra.repositories import ProjectRepository, EvaluationRepository
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
 from infra.folder_provisioner import load_provisioner_from_config
 from infra.integrations.use_case_matrix_sync import (
+    sync_to_use_case_matrix,
     clamp_score as _clamp_score,
     score_from_thresholds as _score_from_thresholds,
     derive_matrix_answers as _derive_matrix_answers,
 )
-
-
-def sync_to_use_case_matrix(project_id: str, project_data: dict, results: dict):
-    """Sincroniza proyecto/evaluación de Planificación hacia Use Case Matrix."""
-    init_db()
-    cfg = ConfigLoader().load()
-    default_weights = cfg.get("default_weights", {k: 1.0 for k in "ABCDEFGH"})
-    weights = {k: float(default_weights.get(k, 1.0)) for k in "ABCDEFGH"}
-    answers = _derive_matrix_answers(project_data, results)
-    impact_score, effort_score = calculate_scores(answers, weights)
-
-    project_repo = ProjectRepository(SessionLocal)
-    eval_repo = EvaluationRepository(SessionLocal)
-
-    project_name = (project_data.get('name') or "").strip()
-    country = (project_data.get('country') or "NA").strip().upper()
-    owner = (project_data.get('owner') or "GEN").strip().upper()
-
-    existing = project_repo.get(project_id)
-    if existing is None:
-        project_repo.create(
-            project_id=project_id,
-            country=country,
-            owner=owner,
-            name=project_name
-        )
-    else:
-        project_repo.update_metadata(
-            project_id=project_id,
-            country=country,
-            owner=owner,
-            name=project_name
-        )
-
-    eval_repo.save_current(
-        project_id=project_id,
-        answers=answers,
-        weights=weights,
-        impact_score=impact_score,
-        effort_score=effort_score
-    )
 
 def calculate_average_hourly_rate():
     """Calcula la hora promedio de todos los proyectos en el Excel"""

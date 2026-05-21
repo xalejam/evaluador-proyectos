@@ -1,15 +1,12 @@
-﻿"""Conexion SQLite para `project_viability.db`."""
-
+﻿"""Conexión principal de base de datos — sqlite3 local o PostgreSQL en nube."""
 from __future__ import annotations
-
-import sqlite3
 from pathlib import Path
+from infra.db.adapter import get_connection, PLACEHOLDER, IS_CLOUD
 
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "project_viability.db"
 
 
-def get_sqlite_conn(db_path: Path | str = DB_PATH) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    return conn
+def get_sqlite_conn(db_path: Path | str = DB_PATH):
+    """Devuelve adaptador de conexión (sqlite3 local o psycopg2 en nube)."""
+    return get_connection(local_path=str(db_path))

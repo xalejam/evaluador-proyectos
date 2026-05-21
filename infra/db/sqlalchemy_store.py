@@ -1,15 +1,21 @@
-"""Infraestructura de base de datos SQLite con SQLAlchemy."""
-
+"""Infraestructura de base de datos con SQLAlchemy — soporta SQLite y PostgreSQL."""
+import os
 from pathlib import Path
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.sql import func
 
+_DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
-DATA_DIR = Path("data")
-DB_PATH = DATA_DIR / "projects.db"
-DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
+if _DATABASE_URL:
+    DATABASE_URL = _DATABASE_URL
+    _engine_kwargs: dict = {}
+else:
+    DATA_DIR = Path("data")
+    DB_PATH = DATA_DIR / "projects.db"
+    DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
+    _engine_kwargs = {"connect_args": {"check_same_thread": False}}
 
 
 class Base(DeclarativeBase):
@@ -19,7 +25,7 @@ class Base(DeclarativeBase):
 class ProjectORM(Base):
     """Tabla projects."""
 
-    __tablename__ = "projects"
+    __tablename__ = "ucm_projects"
 
     project_id: Mapped[str] = mapped_column(String(64), primary_key=True)
     country: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
@@ -34,10 +40,10 @@ class ProjectORM(Base):
 class EvaluationORM(Base):
     """Tabla evaluations."""
 
-    __tablename__ = "evaluations"
+    __tablename__ = "ucm_evaluations"
 
     eval_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id: Mapped[str] = mapped_column(String(64), ForeignKey("projects.project_id"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(String(64), ForeignKey("ucm_projects.project_id"), nullable=False, index=True)
     answers_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     weights_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     impact_score: Mapped[float] = mapped_column(Float, nullable=False)
@@ -48,15 +54,12 @@ class EvaluationORM(Base):
     project = relationship("ProjectORM", back_populates="evaluations")
 
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    future=True
-)
+engine = create_engine(DATABASE_URL, future=True, **_engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 
 def init_db() -> None:
-    """Crea estructura de base de datos si no existe."""
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    """Crea estructura de base de datos si no existe (solo en modo local)."""
+    if not _DATABASE_URL:
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(bind=engine)

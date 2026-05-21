@@ -9,6 +9,7 @@ Uso:
 """
 
 import argparse
+import getpass
 import sys
 from pathlib import Path
 
@@ -77,7 +78,7 @@ def list_users() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Gestión de usuarios del Evaluador")
     parser.add_argument("--email", help="Correo del usuario")
-    parser.add_argument("--password", help="Contraseña (texto plano, se hashea)")
+    parser.add_argument("--password", help="Contraseña (opcional — se solicitará si no se provee)")
     parser.add_argument("--deactivate", action="store_true", help="Desactivar usuario")
     parser.add_argument("--list", action="store_true", help="Listar todos los usuarios")
     args = parser.parse_args()
@@ -88,8 +89,9 @@ def main() -> None:
         if not args.email:
             parser.error("--email es requerido con --deactivate")
         deactivate_user(args.email)
-    elif args.email and args.password:
-        create_user(args.email, args.password)
+    elif args.email:
+        password = args.password or getpass.getpass("Contraseña: ")
+        create_user(args.email, password)
     else:
         parser.print_help()
 

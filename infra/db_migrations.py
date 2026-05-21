@@ -102,6 +102,9 @@ def _ensure_projects_base_table(conn) -> None:
 
 def ensure_projects_schema(conn) -> None:
     """Asegura columnas y defaults necesarios en projects."""
+    from infra.db.adapter import IS_CLOUD
+    if IS_CLOUD:
+        return
     _ensure_projects_base_table(conn)
 
     _add_column_if_missing(conn, "projects", "project_id TEXT")
@@ -141,6 +144,9 @@ def ensure_projects_schema(conn) -> None:
 
 def ensure_evaluations_schema(conn) -> None:
     """Tabla append-only para historial de evaluaciones."""
+    from infra.db.adapter import IS_CLOUD
+    if IS_CLOUD:
+        return
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS project_evaluations (
@@ -328,6 +334,9 @@ def _create_notes_views(conn) -> None:
 
 def ensure_notes_schema(conn) -> None:
     """Asegura esquema de notas inmutables + vistas."""
+    from infra.db.adapter import IS_CLOUD
+    if IS_CLOUD:
+        return
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS project_notes (
@@ -386,6 +395,9 @@ def update_project_status(conn, project_id: str, status: str) -> None:
 
 def ensure_members_schema(conn) -> None:
     """Crea tabla project_members si no existe."""
+    from infra.db.adapter import IS_CLOUD
+    if IS_CLOUD:
+        return
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS project_members (
@@ -441,6 +453,9 @@ def get_all_known_members(conn) -> list[str]:
 
 def ensure_all_operational_schema(conn) -> None:
     """Atajo para asegurar esquemas de projects/evaluations/notes."""
+    from infra.db.adapter import IS_CLOUD
+    if IS_CLOUD:
+        return  # Schema ya existe en Supabase, creado manualmente via SQL Editor
     ensure_projects_schema(conn)
     ensure_evaluations_schema(conn)
     ensure_notes_schema(conn)

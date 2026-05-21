@@ -24,3 +24,5 @@ Thumbs.db
 .env.*
 # Git worktrees
 .worktrees/
+# Streamlit secrets (nunca commitear)
+.streamlit/secrets.toml

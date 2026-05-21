@@ -1,5 +1,6 @@
 # tests/infra/test_folder_provisioner_integration.py
 """Verifica que la config real carga correctamente y el provisioner funciona con tmp_path."""
+
 import json
 import sys
 from pathlib import Path

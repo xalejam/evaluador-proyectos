@@ -10,10 +10,7 @@ PROJECT_ID = "LA-COPILOT-0001"
 
 conn = get_sqlite_conn()
 
-row = conn.execute(
-    "SELECT project_id, name, status FROM projects WHERE project_id = ?",
-    (PROJECT_ID,)
-).fetchone()
+row = conn.execute("SELECT project_id, name, status FROM projects WHERE project_id = ?", (PROJECT_ID,)).fetchone()
 
 if row:
     print("✅ Proyecto encontrado:", dict(row))

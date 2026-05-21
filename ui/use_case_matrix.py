@@ -148,7 +148,9 @@ def _export_buttons(df: pd.DataFrame, prefix: str) -> None:
     json_bytes = df.to_json(orient="records", force_ascii=False, indent=2).encode("utf-8")
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button(t("download_csv"), csv_bytes, file_name=f"{prefix}.csv", mime="text/csv", key=f"{prefix}_csv")
+        st.download_button(
+            t("download_csv"), csv_bytes, file_name=f"{prefix}.csv", mime="text/csv", key=f"{prefix}_csv"
+        )
     with c2:
         st.download_button(
             t("download_json"), json_bytes, file_name=f"{prefix}.json", mime="application/json", key=f"{prefix}_json"
@@ -177,7 +179,9 @@ def _render_scatter(df: pd.DataFrame, threshold_impact: float, threshold_effort:
         return
 
     plot_df["quadrant"] = plot_df.apply(
-        lambda r: classify_quadrant(float(r["impact_score"]), float(r["effort_score"]), threshold_impact, threshold_effort),
+        lambda r: classify_quadrant(
+            float(r["impact_score"]), float(r["effort_score"]), threshold_impact, threshold_effort
+        ),
         axis=1,
     )
     plot_df["label"] = plot_df["project_id"] + " - " + plot_df["name"].fillna("")
@@ -240,7 +244,11 @@ def render_use_case_matrix_tab() -> None:
 
     c1, c2, c3, c4 = st.columns([1, 2, 2, 2])
     with c1:
-        year_filter = st.selectbox(t("ucm_year_filter"), options=years if years else [default_year], index=(years.index(default_year) if years else 0))
+        year_filter = st.selectbox(
+            t("ucm_year_filter"),
+            options=years if years else [default_year],
+            index=(years.index(default_year) if years else 0),
+        )
     with c2:
         team_options = sorted(set(filtered_base["delivery_team_display"].tolist()))
         team_filter = st.multiselect(t("ucm_team_filter"), options=team_options, default=team_options)
@@ -248,7 +256,9 @@ def render_use_case_matrix_tab() -> None:
         status_options = list(dict.fromkeys(base_df["status"].astype(str).tolist() + list(VALID_STATUSES)))
         status_option_labels = [label_status(s) for s in status_options]
         status_map = {label_status(code): code for code in status_options}
-        selected_labels = st.multiselect(t("ucm_status_filter"), options=status_option_labels, default=status_option_labels)
+        selected_labels = st.multiselect(
+            t("ucm_status_filter"), options=status_option_labels, default=status_option_labels
+        )
         status_filter = [status_map[lbl] for lbl in selected_labels]
     with c4:
         text_filter = st.text_input(t("ucm_search_filter"))
@@ -303,7 +313,9 @@ def render_use_case_matrix_tab() -> None:
         new_status_labels = [label_status(s) for s in change_options]
         current_label = label_status(curr_status)
         idx_label = new_status_labels.index(current_label) if current_label in new_status_labels else 0
-        selected_new_label = st.selectbox(t("ucm_change_status"), options=new_status_labels, index=idx_label, key=f"ucm_status_{selected_project_id}")
+        selected_new_label = st.selectbox(
+            t("ucm_change_status"), options=new_status_labels, index=idx_label, key=f"ucm_status_{selected_project_id}"
+        )
         reverse_status = {label_status(code): code for code in change_options}
         new_status = reverse_status[selected_new_label]
         if st.button(t("ucm_save_status_btn"), key=f"ucm_save_status_{selected_project_id}"):
@@ -330,12 +342,31 @@ def render_use_case_matrix_tab() -> None:
     ]
     export_df = filtered[[c for c in export_cols if c in filtered.columns]].copy()
     export_df["quadrant"] = export_df.apply(
-        lambda r: classify_quadrant(float(r["impact_score"]), float(r["effort_score"]), threshold_impact, threshold_effort)
-        if pd.notna(r.get("impact_score")) and pd.notna(r.get("effort_score"))
-        else "N/D",
+        lambda r: (
+            classify_quadrant(float(r["impact_score"]), float(r["effort_score"]), threshold_impact, threshold_effort)
+            if pd.notna(r.get("impact_score")) and pd.notna(r.get("effort_score"))
+            else "N/D"
+        ),
         axis=1,
     )
-    col_order = [c for c in ["project_id", "name", "owner", "country", "status", "year", "score_total", "impact_score", "effort_score", "quadrant", "loop_url", "updated_at"] if c in export_df.columns]
+    col_order = [
+        c
+        for c in [
+            "project_id",
+            "name",
+            "owner",
+            "country",
+            "status",
+            "year",
+            "score_total",
+            "impact_score",
+            "effort_score",
+            "quadrant",
+            "loop_url",
+            "updated_at",
+        ]
+        if c in export_df.columns
+    ]
     export_df = export_df[col_order]
     st.dataframe(export_df, use_container_width=True, hide_index=True)
     _export_buttons(export_df, prefix="use_case_matrix_filtrado")

@@ -3,6 +3,7 @@
 Interfaz abstracta FolderProvisioner para que en fase 2 se agregue
 SharePointFolderProvisioner sin modificar la UI ni la lógica de color.
 """
+
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -45,9 +46,7 @@ class FolderProvisioner(ABC):
     """Interfaz abstracta para aprovisionar carpetas de proyecto."""
 
     @abstractmethod
-    def provision(
-        self, project_id: str, project_name: str, description: str
-    ) -> FolderProvisionResult:
+    def provision(self, project_id: str, project_name: str, description: str) -> FolderProvisionResult:
         """Crea la carpeta del proyecto y sus subcarpetas."""
 
 
@@ -64,9 +63,7 @@ class LocalFolderProvisioner(FolderProvisioner):
         self._subfolders: list[str] = config.get("subfolders", [])
         self._config = config
 
-    def provision(
-        self, project_id: str, project_name: str, description: str
-    ) -> FolderProvisionResult:
+    def provision(self, project_id: str, project_name: str, description: str) -> FolderProvisionResult:
         folder_name = f"{project_id} {project_name}"
         color = detect_color(project_name, description, self._config)
         target = self._base / folder_name
@@ -77,13 +74,9 @@ class LocalFolderProvisioner(FolderProvisioner):
             for sub in self._subfolders:
                 (target / sub).mkdir(exist_ok=True)
             _apply_folder_color(target, color)
-            return FolderProvisionResult(
-                success=True, folder_path=str(target), color=color
-            )
+            return FolderProvisionResult(success=True, folder_path=str(target), color=color)
         except Exception as exc:
-            return FolderProvisionResult(
-                success=False, folder_path=str(target), color=color, error=str(exc)
-            )
+            return FolderProvisionResult(success=False, folder_path=str(target), color=color, error=str(exc))
 
 
 _COLOR_INDEX = {
@@ -102,6 +95,7 @@ def _apply_folder_color(folder_path: Path, color: FolderColor) -> None:
     """
     try:
         import ctypes
+
         ini_path = folder_path / "desktop.ini"
         index = _COLOR_INDEX.get(color, 5)
         ini_path.write_text(
@@ -111,12 +105,8 @@ def _apply_folder_color(folder_path: Path, color: FolderColor) -> None:
         FILE_ATTRIBUTE_HIDDEN = 0x2
         FILE_ATTRIBUTE_SYSTEM = 0x4
         FILE_ATTRIBUTE_READONLY = 0x1
-        ctypes.windll.kernel32.SetFileAttributesW(
-            str(ini_path), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM
-        )
-        ctypes.windll.kernel32.SetFileAttributesW(
-            str(folder_path), FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM
-        )
+        ctypes.windll.kernel32.SetFileAttributesW(str(ini_path), FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM)
+        ctypes.windll.kernel32.SetFileAttributesW(str(folder_path), FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_SYSTEM)
     except Exception:
         pass
 

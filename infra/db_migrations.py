@@ -41,8 +41,7 @@ def _ensure_index(conn: sqlite3.Connection, sql: str) -> None:
 
 def _ensure_projects_base_table(conn: sqlite3.Connection) -> None:
     """Crea projects con esquema compatible si no existe."""
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS projects (
             id TEXT PRIMARY KEY,
             project_id TEXT,
@@ -82,8 +81,7 @@ def _ensure_projects_base_table(conn: sqlite3.Connection) -> None:
             delivery_team TEXT,
             updated_at TEXT DEFAULT (datetime('now'))
         )
-        """
-    )
+        """)
 
 
 def ensure_projects_schema(conn: sqlite3.Connection) -> None:
@@ -107,28 +105,23 @@ def ensure_projects_schema(conn: sqlite3.Connection) -> None:
             conn.execute("ALTER TABLE projects ADD COLUMN updated_at TEXT")
 
     # Compatibilidad: espejar id -> project_id cuando falte.
-    conn.execute(
-        """
+    conn.execute("""
         UPDATE projects
         SET project_id = id
         WHERE COALESCE(project_id, '') = '' AND COALESCE(id, '') <> ''
-        """
-    )
-    conn.execute(
-        """
+        """)
+    conn.execute("""
         UPDATE projects
         SET updated_at = datetime('now')
         WHERE COALESCE(updated_at, '') = ''
-        """
-    )
+        """)
     _add_column_if_missing(conn, "projects", "closed_at TEXT")
     conn.commit()
 
 
 def ensure_evaluations_schema(conn: sqlite3.Connection) -> None:
     """Tabla append-only para historial de evaluaciones."""
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_evaluations (
             evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
@@ -152,8 +145,7 @@ def ensure_evaluations_schema(conn: sqlite3.Connection) -> None:
             effort_score REAL,
             is_current INTEGER NOT NULL DEFAULT 0
         )
-        """
-    )
+        """)
     # Idempotent migrations for DBs created before consolidation
     _add_column_if_missing(conn, "project_evaluations", "answers_json TEXT")
     _add_column_if_missing(conn, "project_evaluations", "weights_json TEXT")
@@ -177,8 +169,7 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
     conn.execute("DROP VIEW IF EXISTS v_project_progress_history")
 
     try:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
@@ -193,10 +184,8 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
                 FROM project_notes pn
             )
             WHERE rn = 1
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE VIEW v_project_last_note AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
@@ -211,11 +200,9 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
                 FROM project_notes pn
             )
             WHERE rn = 1
-            """
-        )
+            """)
     except sqlite3.OperationalError:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
@@ -237,10 +224,8 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
                   AND p2.note_type = pn.note_type
                   AND datetime(p2.created_at) = datetime(pn.created_at)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE VIEW v_project_last_note AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
@@ -260,12 +245,10 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
                 WHERE p2.project_id = pn.project_id
                   AND datetime(p2.created_at) = datetime(pn.created_at)
             )
-            """
-        )
+            """)
 
     try:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_progress_history AS
             SELECT
                 x.project_id,
@@ -289,12 +272,10 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             ) x
             WHERE x.rn = 1
             ORDER BY x.project_id, datetime(x.created_at) DESC, x.note_id DESC
-            """
-        )
+            """)
     except sqlite3.OperationalError:
         # Compatibilidad con engines viejos de SQLite sin funciones avanzadas.
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_progress_history AS
             SELECT
                 pn.project_id,
@@ -308,14 +289,12 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
                 pn.created_at
             FROM project_notes pn
             WHERE pn.progress_percent IS NOT NULL
-            """
-        )
+            """)
 
 
 def ensure_notes_schema(conn: sqlite3.Connection) -> None:
     """Asegura esquema de notas inmutables + vistas."""
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_notes (
             note_id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
@@ -330,8 +309,7 @@ def ensure_notes_schema(conn: sqlite3.Connection) -> None:
             progress_percent INTEGER,
             estimated_end_date TEXT
         )
-        """
-    )
+        """)
     _add_column_if_missing(conn, "project_notes", "entry_group_id TEXT")
     _add_column_if_missing(conn, "project_notes", "note_title TEXT")
     _add_column_if_missing(conn, "project_notes", "progress_percent INTEGER")
@@ -372,8 +350,7 @@ def update_project_status(conn: sqlite3.Connection, project_id: str, status: str
 
 def ensure_members_schema(conn: sqlite3.Connection) -> None:
     """Crea tabla project_members si no existe."""
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
@@ -381,8 +358,7 @@ def ensure_members_schema(conn: sqlite3.Connection) -> None:
             added_at TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(project_id, member_name)
         )
-        """
-    )
+        """)
     _ensure_index(
         conn,
         "CREATE INDEX IF NOT EXISTS idx_project_members_pid ON project_members(project_id)",
@@ -419,9 +395,7 @@ def remove_project_member(conn: sqlite3.Connection, project_id: str, member_name
 
 def get_all_known_members(conn: sqlite3.Connection) -> list[str]:
     """Retorna todos los nombres de miembros únicos en toda la BD (para sugerencias)."""
-    rows = conn.execute(
-        "SELECT DISTINCT member_name FROM project_members ORDER BY member_name"
-    ).fetchall()
+    rows = conn.execute("SELECT DISTINCT member_name FROM project_members ORDER BY member_name").fetchall()
     return [r[0] for r in rows]
 
 

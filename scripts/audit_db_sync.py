@@ -1,4 +1,5 @@
 """Audits divergence between project_viability.db and data/projects.db."""
+
 import sqlite3
 import sys
 
@@ -13,14 +14,10 @@ def audit():
     main_rows = {
         row[0]: row
         for row in conn_main.execute(
-            "SELECT project_id, country, owner, name, status, delivery_team, loop_url, updated_at "
-            "FROM projects"
+            "SELECT project_id, country, owner, name, status, delivery_team, loop_url, updated_at " "FROM projects"
         )
     }
-    matrix_ids = {
-        row[0]
-        for row in conn_matrix.execute("SELECT project_id FROM projects")
-    }
+    matrix_ids = {row[0] for row in conn_matrix.execute("SELECT project_id FROM projects")}
 
     missing = set(main_rows.keys()) - matrix_ids
     print(f"Projects missing from matrix DB: {len(missing)}")

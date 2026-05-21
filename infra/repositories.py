@@ -34,12 +34,7 @@ class ProjectRepository:
         with self.session_factory() as session:
             now = datetime.utcnow()
             row = ProjectORM(
-                project_id=project_id,
-                country=country,
-                owner=owner,
-                name=name,
-                created_at=now,
-                updated_at=now
+                project_id=project_id, country=country, owner=owner, name=name, created_at=now, updated_at=now
             )
             session.add(row)
             session.commit()
@@ -59,14 +54,13 @@ class ProjectRepository:
             session.refresh(row)
             return self._to_model(row)
 
-    def next_project_id(self, country: str, owner: str, n_digits: int, id_format: str = "{country}-{owner}-{sequence}") -> str:
+    def next_project_id(
+        self, country: str, owner: str, n_digits: int, id_format: str = "{country}-{owner}-{sequence}"
+    ) -> str:
         """Genera siguiente consecutivo por combinacion (country, owner)."""
         with self.session_factory() as session:
             rows = session.scalars(
-                select(ProjectORM.project_id).where(
-                    ProjectORM.country == country,
-                    ProjectORM.owner == owner
-                )
+                select(ProjectORM.project_id).where(ProjectORM.country == country, ProjectORM.owner == owner)
             ).all()
 
         max_sequence = 0
@@ -87,7 +81,7 @@ class ProjectRepository:
             owner=row.owner,
             name=row.name,
             created_at=row.created_at,
-            updated_at=row.updated_at
+            updated_at=row.updated_at,
         )
 
 
@@ -100,10 +94,9 @@ class EvaluationRepository:
     def get_current(self, project_id: str) -> Evaluation | None:
         with self.session_factory() as session:
             row = session.scalars(
-                select(EvaluationORM).where(
-                    EvaluationORM.project_id == project_id,
-                    EvaluationORM.is_current.is_(True)
-                ).order_by(EvaluationORM.created_at.desc())
+                select(EvaluationORM)
+                .where(EvaluationORM.project_id == project_id, EvaluationORM.is_current.is_(True))
+                .order_by(EvaluationORM.created_at.desc())
             ).first()
             return self._to_model(row) if row else None
 
@@ -113,7 +106,7 @@ class EvaluationRepository:
         answers: dict[str, int],
         weights: dict[str, float],
         impact_score: float,
-        effort_score: float
+        effort_score: float,
     ) -> Evaluation:
         with self.session_factory() as session:
             session.execute(
@@ -127,7 +120,7 @@ class EvaluationRepository:
                 weights_json=weights,
                 impact_score=float(impact_score),
                 effort_score=float(effort_score),
-                is_current=True
+                is_current=True,
             )
             session.add(row)
             session.commit()
@@ -149,7 +142,7 @@ class EvaluationRepository:
                 project_id=row.project_id,
                 project_name=row.name,
                 impact_score=float(row.impact_score),
-                effort_score=float(row.effort_score)
+                effort_score=float(row.effort_score),
             )
             for row in rows
         ]
@@ -164,5 +157,5 @@ class EvaluationRepository:
             impact_score=float(row.impact_score),
             effort_score=float(row.effort_score),
             is_current=bool(row.is_current),
-            created_at=row.created_at
+            created_at=row.created_at,
         )

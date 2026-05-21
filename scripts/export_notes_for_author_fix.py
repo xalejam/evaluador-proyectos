@@ -26,8 +26,8 @@ FIELDS = [
     "project_owner",
     "project_members",
     "author_actual",
-    "author_nuevo",      # <- EDITAR ESTA COLUMNA
-    "effort_hours",      # referencia, no se modifica
+    "author_nuevo",  # <- EDITAR ESTA COLUMNA
+    "effort_hours",  # referencia, no se modifica
     "note_type",
     "created_at",
     "note_text_preview",
@@ -38,8 +38,7 @@ def export(db_path: str = str(DB_PATH), output_path: str = str(OUTPUT_CSV)) -> i
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT
             pn.note_id,
             pn.project_id,
@@ -55,8 +54,7 @@ def export(db_path: str = str(DB_PATH), output_path: str = str(OUTPUT_CSV)) -> i
             ON p.project_id = pn.project_id OR p.id = pn.project_id
         WHERE pn.effort_hours IS NOT NULL AND pn.effort_hours > 0
         ORDER BY pn.project_id, pn.created_at
-        """
-    ).fetchall()
+        """).fetchall()
 
     # Construir lookup de miembros por proyecto
     member_rows = conn.execute(
@@ -74,19 +72,21 @@ def export(db_path: str = str(DB_PATH), output_path: str = str(OUTPUT_CSV)) -> i
         for r in rows:
             pid = r["project_id"]
             members = members_by_project.get(pid, [])
-            writer.writerow({
-                "note_id": r["note_id"],
-                "project_id": pid,
-                "project_name": r["project_name"],
-                "project_owner": r["project_owner"],
-                "project_members": ", ".join(members) if members else "(sin miembros asignados)",
-                "author_actual": r["author_actual"],
-                "author_nuevo": r["author_actual"],  # pre-llenado igual al actual
-                "effort_hours": r["effort_hours"],
-                "note_type": r["note_type"],
-                "created_at": r["created_at"],
-                "note_text_preview": str(r["note_text"] or "")[:80],
-            })
+            writer.writerow(
+                {
+                    "note_id": r["note_id"],
+                    "project_id": pid,
+                    "project_name": r["project_name"],
+                    "project_owner": r["project_owner"],
+                    "project_members": ", ".join(members) if members else "(sin miembros asignados)",
+                    "author_actual": r["author_actual"],
+                    "author_nuevo": r["author_actual"],  # pre-llenado igual al actual
+                    "effort_hours": r["effort_hours"],
+                    "note_type": r["note_type"],
+                    "created_at": r["created_at"],
+                    "note_text_preview": str(r["note_text"] or "")[:80],
+                }
+            )
 
     print(f"Exportadas {len(rows)} notas con horas a: {output_path}")
     print("Edita la columna 'author_nuevo' en Excel y corre import_author_fix.py")

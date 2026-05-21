@@ -14,7 +14,9 @@ def normalize_owner(value: str) -> str:
     return clean or "GEN"
 
 
-def build_project_id(country: str, owner: str, sequence: int, n_digits: int = 4, pattern: str = "{country}-{owner}-{sequence}") -> str:
+def build_project_id(
+    country: str, owner: str, sequence: int, n_digits: int = 4, pattern: str = "{country}-{owner}-{sequence}"
+) -> str:
     c = normalize_country(country)
     o = normalize_owner(owner)
     s = f"{int(sequence):0{int(n_digits)}d}"

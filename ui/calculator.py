@@ -1,4 +1,5 @@
 """Pure calculation logic for project viability — no Streamlit or Excel dependencies."""
+
 from __future__ import annotations
 
 
@@ -15,6 +16,7 @@ def _f(value, default: float = 0.0) -> float:
 def _t(key: str) -> str:
     try:
         from ui.tabs.shared import t  # type: ignore[import]
+
         return t(key)
     except Exception:
         return key
@@ -48,9 +50,7 @@ class ProjectViabilityCalculator:
             payback_period_months = None
 
         if initial_development_cost > 0:
-            roi_first_year = (
-                (net_annual_benefit - initial_development_cost) / initial_development_cost
-            ) * 100
+            roi_first_year = ((net_annual_benefit - initial_development_cost) / initial_development_cost) * 100
         else:
             roi_first_year = 0
 
@@ -125,15 +125,11 @@ class ProjectViabilityCalculator:
             efficiency_ratio = 0
 
         if current_time > 0:
-            actual_time_reduction_percent = (
-                (current_time - actual_time) / current_time
-            ) * 100
+            actual_time_reduction_percent = ((current_time - actual_time) / current_time) * 100
         else:
             actual_time_reduction_percent = 0
 
-        actual_monthly_savings = (
-            actual_savings_per_task * actual_tasks * staff_count * avg_salary
-        )
+        actual_monthly_savings = actual_savings_per_task * actual_tasks * staff_count * avg_salary
         actual_annual_savings = actual_monthly_savings * 12
 
         if efficiency_ratio >= 1.2:
@@ -151,9 +147,7 @@ class ProjectViabilityCalculator:
 
         adoption_adjustment = (adoption_rate / 100) * 0.3
         satisfaction_adjustment = (satisfaction / 10) * 0.2
-        performance_score = min(
-            100, performance_score * (1 + adoption_adjustment + satisfaction_adjustment)
-        )
+        performance_score = min(100, performance_score * (1 + adoption_adjustment + satisfaction_adjustment))
 
         return {
             "efficiency_ratio": round(efficiency_ratio, 2),

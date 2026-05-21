@@ -13,9 +13,7 @@ from infra.db.connection import get_sqlite_conn
 
 PROJECT_ID = "LA-COPILOT-0001"
 AUTHOR = "Xiomara"
-LOOP_URL = (
-    "https://loop.cloud.microsoft/join/eyJnIjoiVDBSVFVIeHJkR2RzWW5WakxuTm9ZWEpsY0c5cGJuUXVZMjl0ZkdJaFYzVjJVRU5UTkVGeWF6SXljVTk2TTNKTExVb3RjbmxGWTFsZmEzazRVa3BwTUVsNlRVNVdTbTVTWVhoSk1GZzFTMWhsVlZSWk1XczRhVXBmVlc0NUxYd3dNVU5GTmtsUVRFNU9UVFZYVEVkWVRWQTBVa1JKVFZwTU5saEZXRk5LUWtoSiIsImkiOiJjY041dGRneUVDZmFGdXI0d3ExMXciLCJ3IjoiVDBSVFVIeHJkR2RzWW5WakxuTm9ZWEpsY0c5cGJuUXVZMjl0ZkdJaFYzVjJVRU5UTkVGeWF6SXljVTk2TTNKTExVb3RjbmxGWTFsZmEzazRVa3BwTUVsNlRVNVdTbTVTWVhoSk1GZzFTMWhsVlZSWk1XczRhVXBmVlc0NUxYd3dNVU5GTmtsUVRFNU9UVFZYVEVkWVRWQTBVa1JKVFZwTU5saEZXRk5LUWtoSiJ9"
-)
+LOOP_URL = "https://loop.cloud.microsoft/join/eyJnIjoiVDBSVFVIeHJkR2RzWW5WakxuTm9ZWEpsY0c5cGJuUXVZMjl0ZkdJaFYzVjJVRU5UTkVGeWF6SXljVTk2TTNKTExVb3RjbmxGWTFsZmEzazRVa3BwTUVsNlRVNVdTbTVTWVhoSk1GZzFTMWhsVlZSWk1XczRhVXBmVlc0NUxYd3dNVU5GTmtsUVRFNU9UVFZYVEVkWVRWQTBVa1JKVFZwTU5saEZXRk5LUWtoSiIsImkiOiJjY041dGRneUVDZmFGdXI0d3ExMXciLCJ3IjoiVDBSVFVIeHJkR2RzWW5WakxuTm9ZWEpsY0c5cGJuUXVZMjl0ZkdJaFYzVjJVRU5UTkVGeWF6SXljVTk2TTNKTExVb3RjbmxGWTFsZmEzazRVa3BwTUVsNlRVNVdTbTVTWVhoSk1GZzFTMWhsVlZSWk1XczRhVXBmVlc0NUxYd3dNVU5GTmtsUVRFNU9UVFZYVEVkWVRWQTBVa1JKVFZwTU5saEZXRk5LUWtoSiJ9"
 
 # Cada entrada: (fecha_str, progress_percent, {note_type: text})
 ENTRIES = [
@@ -33,8 +31,7 @@ ENTRIES = [
                 "Alinear Champions por área para identificación de casos de uso."
             ),
             "bloqueador": (
-                "Capacidad inicial de adopción desigual; afecta ritmo del proyecto; "
-                "lo destraban Champions y PMO."
+                "Capacidad inicial de adopción desigual; afecta ritmo del proyecto; " "lo destraban Champions y PMO."
             ),
             "riesgo": (
                 "Riesgo de baja adopción temprana; probabilidad media; "
@@ -56,8 +53,7 @@ ENTRIES = [
                 "Asegurar acceso al material y sesiones sin licencia."
             ),
             "bloqueador": (
-                "Licencias Copilot limitadas; impacta capacidad técnica; "
-                "lo destraba liderazgo regional."
+                "Licencias Copilot limitadas; impacta capacidad técnica; " "lo destraba liderazgo regional."
             ),
             "riesgo": (
                 "Riesgo de subutilizar perfiles técnicos; probabilidad media; "
@@ -77,14 +73,8 @@ ENTRIES = [
                 "Revisar publicaciones y definir sesiones clave a asistir – NOLA – feb/2026. "
                 "Monitorear asistencia a entrenamientos críticos."
             ),
-            "bloqueador": (
-                "Sobrecarga de sesiones paralelas; impacto en foco; "
-                "lo destraban PMO y líderes locales."
-            ),
-            "riesgo": (
-                "Riesgo de dispersión de esfuerzo; probabilidad media; "
-                "mitigar priorizando sesiones core."
-            ),
+            "bloqueador": ("Sobrecarga de sesiones paralelas; impacto en foco; " "lo destraban PMO y líderes locales."),
+            "riesgo": ("Riesgo de dispersión de esfuerzo; probabilidad media; " "mitigar priorizando sesiones core."),
         },
     ),
     (
@@ -100,8 +90,7 @@ ENTRIES = [
                 "Evaluar impacto sin licencia full."
             ),
             "bloqueador": (
-                "Gobernanza de licencias centralizada; limita flexibilidad; "
-                "lo destraba dirección regional."
+                "Gobernanza de licencias centralizada; limita flexibilidad; " "lo destraba dirección regional."
             ),
             "riesgo": (
                 "Riesgo de fricción entre equipos; probabilidad baja-media; "
@@ -113,13 +102,8 @@ ENTRIES = [
         "2026-03-07 00:00:00",
         12,
         {
-            "general": (
-                "Creación de Copilot para generar business case y aterrizar ideas del equipo."
-            ),
-            "proximo_paso": (
-                "Crear business case con ideas a implementar. "
-                "Evaluar impacto sin licencia full."
-            ),
+            "general": ("Creación de Copilot para generar business case y aterrizar ideas del equipo."),
+            "proximo_paso": ("Crear business case con ideas a implementar. " "Evaluar impacto sin licencia full."),
             "bloqueador": "",
             "riesgo": "Riesgo de que no usen la herramienta; probabilidad media.",
         },
@@ -128,13 +112,8 @@ ENTRIES = [
         "2026-03-20 00:00:00",
         15,
         {
-            "general": (
-                "Creación de business case con ideas que se podrían desarrollar."
-            ),
-            "proximo_paso": (
-                "Presentar avances al board. "
-                "Evaluar impacto sin licencia full."
-            ),
+            "general": ("Creación de business case con ideas que se podrían desarrollar."),
+            "proximo_paso": ("Presentar avances al board. " "Evaluar impacto sin licencia full."),
             "bloqueador": "",
             "riesgo": "",
         },
@@ -151,14 +130,8 @@ ENTRIES = [
                 "Priorizar agentes con matriz impacto/esfuerzo – Gonzalo + Champions – abr/2026. "
                 "Definir KPIs de adopción por agente – Xiomara – abr/2026."
             ),
-            "bloqueador": (
-                "Falta de métricas de adopción estandarizadas; "
-                "impacta escalamiento; lo destraba PMO."
-            ),
-            "riesgo": (
-                "Riesgo de exceso de scope; probabilidad alta; "
-                "mitigar con MVP claro y criterios go/no-go."
-            ),
+            "bloqueador": ("Falta de métricas de adopción estandarizadas; " "impacta escalamiento; lo destraba PMO."),
+            "riesgo": ("Riesgo de exceso de scope; probabilidad alta; " "mitigar con MVP claro y criterios go/no-go."),
         },
     ),
 ]

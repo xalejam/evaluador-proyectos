@@ -6,10 +6,7 @@ Une todos los modulos: planificacion, seguimiento, dashboard, feedback y SQL.
 
 import streamlit as st
 from pathlib import Path
-from ui.tabs.shared import (
-    t, init_excel_manager, render_language_selector,
-    render_sidebar_stats
-)
+from ui.tabs.shared import t, init_excel_manager, render_language_selector, render_sidebar_stats
 from ui.state import init_state
 from ui.tabs.planning import render_planning_tab as render_viabilidad_tab
 from ui.tabs.tracking import render_tracking_tab as render_post_impl_tab
@@ -24,11 +21,7 @@ from infra.db.connection import get_sqlite_conn, DB_PATH
 ROOT = Path(__file__).resolve().parent
 
 # Configuracion de Streamlit
-st.set_page_config(
-    page_title="Evaluador de Viabilidad Bilingue",
-    page_icon=":abacus:",
-    layout="wide"
-)
+st.set_page_config(page_title="Evaluador de Viabilidad Bilingue", page_icon=":abacus:", layout="wide")
 
 
 def main():
@@ -57,15 +50,17 @@ def main():
     render_sidebar_stats()
 
     # Pestanas principales
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
-        t("viability_tab"),
-        t("operational_log_tab"),
-        t("impact_kpis_tab"),
-        t("dashboard_tab"),
-        t("use_case_matrix_tab"),
-        t("feedback_tab"),
-        t("sql_tab"),
-    ])
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+        [
+            t("viability_tab"),
+            t("operational_log_tab"),
+            t("impact_kpis_tab"),
+            t("dashboard_tab"),
+            t("use_case_matrix_tab"),
+            t("feedback_tab"),
+            t("sql_tab"),
+        ]
+    )
 
     with tab1:
         render_viabilidad_tab()

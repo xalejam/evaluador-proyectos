@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-
 DEFAULTS = {
     "language": "es",
     "edit_mode": False,

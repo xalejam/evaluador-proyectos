@@ -16,14 +16,12 @@ FIELDS = ["note_id", "project_id", "note_type", "note_title", "created_at", "not
 def export_notes(db_path: str = str(DB_PATH), output_path: str = str(OUTPUT_CSV)) -> int:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    rows = conn.execute(
-        """
+    rows = conn.execute("""
         SELECT note_id, project_id, note_type, note_title, created_at, note_text
         FROM project_notes
         WHERE effort_hours IS NULL
         ORDER BY project_id, created_at
-        """
-    ).fetchall()
+        """).fetchall()
     conn.close()
 
     with open(output_path, "w", newline="", encoding="utf-8") as f:

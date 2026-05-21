@@ -11,9 +11,7 @@ def test_ensure_all_operational_schema_creates_project_notes():
         conn = sqlite3.connect(db_path)
         ensure_all_operational_schema(conn)
         conn.commit()
-        cursor = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='project_notes'"
-        )
+        cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='project_notes'")
         assert cursor.fetchone() is not None, "project_notes table should exist after ensure_all_operational_schema"
         conn.close()
     finally:

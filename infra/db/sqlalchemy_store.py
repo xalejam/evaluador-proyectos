@@ -6,7 +6,6 @@ from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, Stri
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
 from sqlalchemy.sql import func
 
-
 DATA_DIR = Path("data")
 DB_PATH = DATA_DIR / "projects.db"
 DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
@@ -26,7 +25,9 @@ class ProjectORM(Base):
     owner: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
-    updated_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     evaluations = relationship("EvaluationORM", back_populates="project", cascade="all, delete-orphan")
 
@@ -48,11 +49,7 @@ class EvaluationORM(Base):
     project = relationship("ProjectORM", back_populates="evaluations")
 
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},
-    future=True
-)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False}, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 

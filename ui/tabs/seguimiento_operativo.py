@@ -1,5 +1,4 @@
-﻿
-"""Seguimiento Operativo v2 (notas inmutables por proyecto).
+﻿"""Seguimiento Operativo v2 (notas inmutables por proyecto).
 
 Este modulo usa SQLite en `project_viability.db` y puede ejecutarse de forma
 independiente con:
@@ -29,14 +28,25 @@ from ui.i18n_labels import label_note_type, label_status
 
 # Configuracion (editable)
 DB_PATH = "project_viability.db"
-ONGOING_STATUSES = ("evaluated", "approved", "in_agenda", "backlog", "on_hold", "rejected", "executing", "implemented", "handed_off")
+ONGOING_STATUSES = (
+    "evaluated",
+    "approved",
+    "in_agenda",
+    "backlog",
+    "on_hold",
+    "rejected",
+    "executing",
+    "implemented",
+    "handed_off",
+)
 CAPTURE_DEFAULT_STATUSES = ("approved", "in_agenda", "executing")
 NOTE_TYPES = ("general", "proximo_paso", "bloqueador", "riesgo")
-ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder","agent", "other")
+ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder", "agent", "other")
 TECH_STACK_OPTIONS = ("python", "vba", "powerbi", "agent", "other")
 START_EXECUTION_STATUSES = ("evaluated", "approved", "in_agenda")
 END_MARKER = "/end"
 POST_CLOSURE_TYPE = "soporte_post_entrega"
+
 
 def _note_type_help() -> dict[str, str]:
     return {
@@ -139,8 +149,7 @@ def _create_views(conn: sqlite3.Connection) -> None:
     conn.execute("DROP VIEW IF EXISTS v_project_progress_history")
 
     try:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
@@ -155,10 +164,8 @@ def _create_views(conn: sqlite3.Connection) -> None:
                 FROM project_notes pn
             )
             WHERE rn = 1
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE VIEW v_project_last_note AS
             SELECT
                 note_id, project_id, note_type, note_text, note_title, author, tags,
@@ -173,11 +180,9 @@ def _create_views(conn: sqlite3.Connection) -> None:
                 FROM project_notes pn
             )
             WHERE rn = 1
-            """
-        )
+            """)
     except sqlite3.OperationalError:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_latest_notes AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
@@ -199,10 +204,8 @@ def _create_views(conn: sqlite3.Connection) -> None:
                   AND p2.note_type = pn.note_type
                   AND datetime(p2.created_at) = datetime(pn.created_at)
             )
-            """
-        )
-        conn.execute(
-            """
+            """)
+        conn.execute("""
             CREATE VIEW v_project_last_note AS
             SELECT
                 pn.note_id, pn.project_id, pn.note_type, pn.note_text, pn.note_title,
@@ -222,12 +225,10 @@ def _create_views(conn: sqlite3.Connection) -> None:
                 WHERE p2.project_id = pn.project_id
                   AND datetime(p2.created_at) = datetime(pn.created_at)
             )
-            """
-        )
+            """)
 
     try:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_progress_history AS
             SELECT
                 x.project_id,
@@ -251,11 +252,9 @@ def _create_views(conn: sqlite3.Connection) -> None:
             ) x
             WHERE x.rn = 1
             ORDER BY x.project_id, datetime(x.created_at) DESC, x.note_id DESC
-            """
-        )
+            """)
     except sqlite3.OperationalError:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE VIEW v_project_progress_history AS
             SELECT
                 pn.project_id,
@@ -269,14 +268,12 @@ def _create_views(conn: sqlite3.Connection) -> None:
                 pn.created_at
             FROM project_notes pn
             WHERE pn.progress_percent IS NOT NULL
-            """
-        )
+            """)
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     """Crea esquema base y aplica migraciones/vistas."""
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS project_notes (
             note_id INTEGER PRIMARY KEY AUTOINCREMENT,
             project_id TEXT NOT NULL,
@@ -291,8 +288,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             progress_percent INTEGER,
             estimated_end_date TEXT
         )
-        """
-    )
+        """)
     if _table_exists(conn, "project_notes"):
         notes_cols = _table_columns(conn, "project_notes")
         if "progress_percent" not in notes_cols:
@@ -300,9 +296,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         if "estimated_end_date" not in notes_cols:
             conn.execute("ALTER TABLE project_notes ADD COLUMN estimated_end_date TEXT")
     migrate_schema(conn)
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_project_notes_pid_date ON project_notes(project_id, created_at DESC)"
-    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_project_notes_pid_date ON project_notes(project_id, created_at DESC)")
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_project_notes_pid_type_date ON project_notes(project_id, note_type, created_at DESC)"
     )
@@ -896,9 +890,7 @@ def get_executive_summary_df(
     for project_id in df["project_id"].tolist():
         p_hist_df = get_project_progress_trend(conn, project_id, limit=30)
         vals = [
-            int(v)
-            for v in p_hist_df["progress_percent"].tolist()
-            if isinstance(v, (int, float)) and not pd.isna(v)
+            int(v) for v in p_hist_df["progress_percent"].tolist() if isinstance(v, (int, float)) and not pd.isna(v)
         ]
         last_three = vals[:3]
         progress_histories.append(vals[::-1] if vals else [])
@@ -930,6 +922,7 @@ def get_executive_summary_df(
     )
     out = out.sort_values(["Days since last", "Project"], ascending=[False, True]).reset_index(drop=True)
     return out
+
 
 def _export_buttons(df: pd.DataFrame, prefix: str, label_suffix: str) -> None:
     if df.empty:
@@ -1002,16 +995,14 @@ def seed_demo_data(conn: sqlite3.Connection) -> None:
 
         n_notes = conn.execute("SELECT COUNT(*) AS n FROM project_notes").fetchone()["n"]
         if n_notes == 0:
-            conn.execute(
-                """
+            conn.execute("""
                 INSERT INTO project_notes
                     (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title)
                 VALUES
                     ('MX-XIOMY-0001', 'Se valido backlog con Comercial y TI.', 'general', 'Xiomy', 'comercial,ti', 0, 'seedgrp1', 'Kickoff'),
                     ('MX-XIOMY-0001', 'Enviar briefing a TI - Responsable: Xiomy - Fecha: 2026-03-03.', 'proximo_paso', 'Xiomy', 'accion,ti', 0, 'seedgrp1', 'Kickoff'),
                     ('MX-XIOMY-0002', 'Riesgo de cambio de owner en area comercial.', 'riesgo', 'Xiomy', 'riesgo,owner', 0, 'seedgrp2', 'Riesgos iniciales')
-                """
-            )
+                """)
         conn.commit()
         st.success(t("ops_demo_loaded"))
     except Exception as exc:
@@ -1159,7 +1150,9 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             )
             st.write("")
             st.write("")
-            if st.button(t("save_links"), key=f"ops_save_links_{selected_project.project_id}", use_container_width=True):
+            if st.button(
+                t("save_links"), key=f"ops_save_links_{selected_project.project_id}", use_container_width=True
+            ):
                 try:
                     upsert_project_links(
                         conn,
@@ -1196,7 +1189,9 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             value=True,
             key=f"ops_enable_progress_{selected_project.project_id}",
         )
-        default_progress = int(last_progress_value) if last_progress_value is not None and not pd.isna(last_progress_value) else 0
+        default_progress = (
+            int(last_progress_value) if last_progress_value is not None and not pd.isna(last_progress_value) else 0
+        )
         progress_percent_input = st.number_input(
             t("ops_progress_percent_label"),
             min_value=0,
@@ -1357,19 +1352,24 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                 st.error("Las horas son obligatorias y deben ser mayores a 0.")
             else:
                 try:
-                    insert_notes_batch(conn, [{
-                        "project_id": selected_project.project_id,
-                        "note_type": POST_CLOSURE_TYPE,
-                        "note_text": str(pc_text).strip(),
-                        "author": pc_author.strip(),
-                        "tags": "",
-                        "is_private": False,
-                        "entry_group_id": uuid.uuid4().hex,
-                        "note_title": "Post-cierre",
-                        "progress_percent": None,
-                        "estimated_end_date": None,
-                        "effort_hours": pc_hours,
-                    }])
+                    insert_notes_batch(
+                        conn,
+                        [
+                            {
+                                "project_id": selected_project.project_id,
+                                "note_type": POST_CLOSURE_TYPE,
+                                "note_text": str(pc_text).strip(),
+                                "author": pc_author.strip(),
+                                "tags": "",
+                                "is_private": False,
+                                "entry_group_id": uuid.uuid4().hex,
+                                "note_title": "Post-cierre",
+                                "progress_percent": None,
+                                "estimated_end_date": None,
+                                "effort_hours": pc_hours,
+                            }
+                        ],
+                    )
                     st.success("Actividad post-cierre registrada correctamente.")
                     st.rerun()
                 except Exception as exc:
@@ -1394,6 +1394,7 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
             c1, c2 = st.columns(2)
             c1.metric("Horas desarrollo", f"{dev_h:.1f} h")
             c2.metric("Total real", f"{total_h:.1f} h")
+
 
 def _render_workload_section(conn: sqlite3.Connection, statuses: list[str]) -> None:
     """Renderiza el bloque Carga del equipo al final del tab ejecutivo."""
@@ -1541,10 +1542,7 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
     if not series_by_project:
         st.info(t("ops_progress_no_data"))
     else:
-        padded = {
-            label: values + [None] * (max_points - len(values))
-            for label, values in series_by_project.items()
-        }
+        padded = {label: values + [None] * (max_points - len(values)) for label, values in series_by_project.items()}
         progress_compare_df = pd.DataFrame(padded)
         progress_compare_df.index = range(1, max_points + 1)
         st.caption("Comparativo de avance por proyecto en una sola vista.")
@@ -1561,7 +1559,9 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
 def _render_cards(df: pd.DataFrame) -> None:
     grouped = df.copy()
     grouped["entry_group_id"] = grouped["entry_group_id"].fillna("").astype(str)
-    grouped["group_key"] = grouped["entry_group_id"].where(grouped["entry_group_id"] != "", grouped["note_id"].astype(str))
+    grouped["group_key"] = grouped["entry_group_id"].where(
+        grouped["entry_group_id"] != "", grouped["note_id"].astype(str)
+    )
 
     for group_id, chunk in grouped.groupby("group_key", sort=False):
         first = chunk.iloc[0]
@@ -1596,7 +1596,12 @@ def _render_timeline_tab(conn: sqlite3.Connection) -> None:
     with col1:
         filter_text = st.text_input(t("ops_search_text"), key="ops_tl_text")
     with col2:
-        filter_type = st.selectbox(t("ops_type"), options=["todos", *NOTE_TYPES], format_func=lambda x: t("ops_all") if x == "todos" else label_note_type(x), key="ops_tl_type")
+        filter_type = st.selectbox(
+            t("ops_type"),
+            options=["todos", *NOTE_TYPES],
+            format_func=lambda x: t("ops_all") if x == "todos" else label_note_type(x),
+            key="ops_tl_type",
+        )
     with col3:
         limit = st.number_input(t("ops_limit"), min_value=10, max_value=2000, value=200, step=10, key="ops_tl_limit")
 
@@ -1695,4 +1700,3 @@ def render_seguimiento_operativo() -> None:
 if __name__ == "__main__":
     st.set_page_config(page_title="Seguimiento Operativo", page_icon=":pushpin:", layout="wide")
     render_seguimiento_operativo()
-

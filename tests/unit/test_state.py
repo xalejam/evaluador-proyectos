@@ -17,6 +17,7 @@ def test_init_state_sets_all_required_keys():
     with patch("streamlit.session_state", mock_state):
         import importlib
         import ui.state as state_mod
+
         importlib.reload(state_mod)
         state_mod.init_state()
 
@@ -30,6 +31,7 @@ def test_init_state_is_idempotent():
     with patch("streamlit.session_state", mock_state):
         import importlib
         import ui.state as state_mod
+
         importlib.reload(state_mod)
         state_mod.init_state()
         state_mod.init_state()

@@ -15,8 +15,7 @@ def test_payback_is_none_when_no_benefit():
         development_cost_per_hour=100,
         maintenance_monthly=1000,
     )
-    assert result["payback_period_months"] is None, \
-        "payback debe ser None (no hay payback posible), no float('inf')"
+    assert result["payback_period_months"] is None, "payback debe ser None (no hay payback posible), no float('inf')"
 
 
 def test_payback_is_none_when_maintenance_exceeds_savings():

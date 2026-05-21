@@ -19,6 +19,7 @@ variables:
 steps:
   - checkout: self
     clean: true
+    fetchDepth: 0
 
   - task: UsePythonVersion@0
     inputs:
@@ -66,7 +67,6 @@ steps:
   - script: |
       git remote remove github || true
       git remote add github https://x-token-auth:$(GITHUB_TOKEN)@github.com/xalejam/evaluador-proyectos.git
-      git fetch --unshallow || true
       git push github refs/heads/main:refs/heads/main --force
     displayName: "Mirror to GitHub"
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))

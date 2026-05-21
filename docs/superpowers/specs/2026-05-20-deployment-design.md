@@ -15,7 +15,7 @@ metadata:
 
 ## Contexto
 
-La app es un evaluador de proyectos construido en Streamlit con dos bases de datos SQLite locales (`project_viability.db` y `data/projects.db`). Actualmente solo puede usarla quien tenga el repo en su máquina. El objetivo es que los 5 integrantes del equipo puedan ingresar sus propias notas y datos desde cualquier navegador, sin depender de Xiomara.
+La app es un evaluador de proyectos construido en Streamlit con dos bases de datos SQLite locales (`project_viability.db` y `data/projects.db`). Actualmente solo puede usarla quien tenga el repo en su máquina. El objetivo es que hasta 5 integrantes del equipo puedan ingresar sus propias notas y datos desde cualquier navegador, sin depender de Xiomara.
 
 **Restricciones:**
 - Sin acceso de administrador a Azure (no está dentro del tenant corporativo)

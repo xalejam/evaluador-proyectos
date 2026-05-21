@@ -9,12 +9,13 @@ from sqlalchemy.sql import func
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
+DATA_DIR = Path("data")
+DB_PATH = DATA_DIR / "projects.db"
+
 if _DATABASE_URL:
     DATABASE_URL = _DATABASE_URL
     _engine_kwargs: dict = {}
 else:
-    DATA_DIR = Path("data")
-    DB_PATH = DATA_DIR / "projects.db"
     DATABASE_URL = f"sqlite:///{DB_PATH.as_posix()}"
     _engine_kwargs = {"connect_args": {"check_same_thread": False}}
 

@@ -9,3 +9,4 @@ requests
 requests-ntlm
 psycopg2-binary
 bcrypt
+PyYAML

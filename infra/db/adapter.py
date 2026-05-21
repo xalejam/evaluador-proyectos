@@ -19,17 +19,18 @@ class _Psycopg2Adapter:
 
         self._conn = psycopg2.connect(url)
         psycopg2.extras.register_default_jsonb(self._conn)
+        self._dict_cursor_factory = psycopg2.extras.RealDictCursor
 
     def cursor(self) -> Any:
-        return self._conn.cursor()
+        return self._conn.cursor(cursor_factory=self._dict_cursor_factory)
 
     def execute(self, sql: str, params: tuple = ()) -> Any:
-        cur = self._conn.cursor()
+        cur = self._conn.cursor(cursor_factory=self._dict_cursor_factory)
         cur.execute(sql, params)
         return cur
 
     def executemany(self, sql: str, params_seq) -> Any:
-        cur = self._conn.cursor()
+        cur = self._conn.cursor(cursor_factory=self._dict_cursor_factory)
         cur.executemany(sql, params_seq)
         return cur
 

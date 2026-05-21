@@ -18,9 +18,17 @@ class _Psycopg2Adapter:
         self._conn = psycopg2.connect(url)
         psycopg2.extras.register_default_jsonb(self._conn)
 
+    def cursor(self) -> Any:
+        return self._conn.cursor()
+
     def execute(self, sql: str, params: tuple = ()) -> Any:
         cur = self._conn.cursor()
         cur.execute(sql, params)
+        return cur
+
+    def executemany(self, sql: str, params_seq) -> Any:
+        cur = self._conn.cursor()
+        cur.executemany(sql, params_seq)
         return cur
 
     def commit(self) -> None:
@@ -43,8 +51,14 @@ class _Sqlite3Adapter:
         self._conn = sqlite3.connect(path)
         self._conn.row_factory = sqlite3.Row
 
+    def cursor(self) -> Any:
+        return self._conn.cursor()
+
     def execute(self, sql: str, params: tuple = ()) -> Any:
         return self._conn.execute(sql, params)
+
+    def executemany(self, sql: str, params_seq) -> Any:
+        return self._conn.executemany(sql, params_seq)
 
     def commit(self) -> None:
         self._conn.commit()

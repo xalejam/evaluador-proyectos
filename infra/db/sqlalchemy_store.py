@@ -1,4 +1,5 @@
 """Infraestructura de base de datos con SQLAlchemy — soporta SQLite y PostgreSQL."""
+
 import os
 from pathlib import Path
 
@@ -32,7 +33,9 @@ class ProjectORM(Base):
     owner: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), nullable=False)
-    updated_at: Mapped[DateTime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    updated_at: Mapped[DateTime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     evaluations = relationship("EvaluationORM", back_populates="project", cascade="all, delete-orphan")
 
@@ -43,7 +46,9 @@ class EvaluationORM(Base):
     __tablename__ = "ucm_evaluations"
 
     eval_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id: Mapped[str] = mapped_column(String(64), ForeignKey("ucm_projects.project_id"), nullable=False, index=True)
+    project_id: Mapped[str] = mapped_column(
+        String(64), ForeignKey("ucm_projects.project_id"), nullable=False, index=True
+    )
     answers_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     weights_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     impact_score: Mapped[float] = mapped_column(Float, nullable=False)

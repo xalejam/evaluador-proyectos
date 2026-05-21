@@ -7,8 +7,7 @@ DB_MATRIX = os.path.abspath("data/projects.db")
 
 
 @pytest.mark.skipif(
-    not os.path.exists(DB_MAIN) or not os.path.exists(DB_MATRIX),
-    reason="DBs not present in this environment"
+    not os.path.exists(DB_MAIN) or not os.path.exists(DB_MATRIX), reason="DBs not present in this environment"
 )
 def test_no_approved_projects_missing_from_matrix():
     conn_main = sqlite3.connect(DB_MAIN)
@@ -20,10 +19,7 @@ def test_no_approved_projects_missing_from_matrix():
             "SELECT project_id FROM projects WHERE status IN ('approved','executing','implemented')"
         )
     }
-    matrix_ids = {
-        row[0]
-        for row in conn_matrix.execute("SELECT project_id FROM projects")
-    }
+    matrix_ids = {row[0] for row in conn_matrix.execute("SELECT project_id FROM projects")}
 
     conn_main.close()
     conn_matrix.close()

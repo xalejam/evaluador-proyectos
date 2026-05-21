@@ -64,7 +64,7 @@ steps:
     displayName: "Run tests"
 
   - script: |
-      git remote add github https://x-token-auth:$(GITHUB_TOKEN)@github.com/USUARIO_GITHUB/evaluador-proyectos.git || true
+      git remote add github https://x-token-auth:$(GITHUB_TOKEN)@github.com/xalejam/evaluador-proyectos.git || true
       git push github HEAD:main --force
     displayName: "Mirror to GitHub"
     condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))

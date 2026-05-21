@@ -1,7 +1,9 @@
 """Clasificacion de cuadrantes para Use Case Matrix."""
 
 
-def classify_quadrant(impact_score: float, effort_score: float, threshold_impact: float, threshold_effort: float) -> str:
+def classify_quadrant(
+    impact_score: float, effort_score: float, threshold_impact: float, threshold_effort: float
+) -> str:
     """Clasifica un caso en cuadrantes con umbrales fijos."""
     high_impact = impact_score >= threshold_impact
     high_effort = effort_score >= threshold_effort

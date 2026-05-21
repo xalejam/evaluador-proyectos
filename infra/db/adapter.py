@@ -1,4 +1,5 @@
 """Adaptador de conexión que unifica sqlite3 y psycopg2."""
+
 from __future__ import annotations
 import os
 import sqlite3
@@ -15,6 +16,7 @@ class _Psycopg2Adapter:
     def __init__(self, url: str) -> None:
         import psycopg2
         import psycopg2.extras
+
         self._conn = psycopg2.connect(url)
         psycopg2.extras.register_default_jsonb(self._conn)
 

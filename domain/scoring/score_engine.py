@@ -31,7 +31,9 @@ def calculate_scores(answers: dict[str, int], weights: dict[str, float]) -> tupl
     return calculate_impact_score(answers, weights), calculate_effort_score(answers, weights)
 
 
-def viability_component_scores(time_reduction_percent: float, risk_level: int, complexity_level: int) -> dict[str, float]:
+def viability_component_scores(
+    time_reduction_percent: float, risk_level: int, complexity_level: int
+) -> dict[str, float]:
     if time_reduction_percent >= 70:
         impact = 35.0
     elif time_reduction_percent >= 50:

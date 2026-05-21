@@ -1,4 +1,5 @@
 """Pantalla de login y lógica de autenticación."""
+
 from __future__ import annotations
 import bcrypt
 import streamlit as st

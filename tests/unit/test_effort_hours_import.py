@@ -32,7 +32,9 @@ def _run_import(db_path, rows):
     from scripts.import_notes_hours import import_hours
 
     buf = io.StringIO()
-    writer = csv.DictWriter(buf, fieldnames=["note_id", "project_id", "note_type", "note_title", "created_at", "note_text", "effort_hours"])
+    writer = csv.DictWriter(
+        buf, fieldnames=["note_id", "project_id", "note_type", "note_title", "created_at", "note_text", "effort_hours"]
+    )
     writer.writeheader()
     for r in rows:
         writer.writerow(r)
@@ -41,10 +43,29 @@ def _run_import(db_path, rows):
 
 
 def test_valid_import_updates_hours(db_with_notes):
-    result = _run_import(db_with_notes, [
-        {"note_id": 1, "project_id": "P1", "note_type": "general", "note_title": "", "created_at": "", "note_text": "", "effort_hours": 4.5},
-        {"note_id": 2, "project_id": "P1", "note_type": "proximo_paso", "note_title": "", "created_at": "", "note_text": "", "effort_hours": 2.0},
-    ])
+    result = _run_import(
+        db_with_notes,
+        [
+            {
+                "note_id": 1,
+                "project_id": "P1",
+                "note_type": "general",
+                "note_title": "",
+                "created_at": "",
+                "note_text": "",
+                "effort_hours": 4.5,
+            },
+            {
+                "note_id": 2,
+                "project_id": "P1",
+                "note_type": "proximo_paso",
+                "note_title": "",
+                "created_at": "",
+                "note_text": "",
+                "effort_hours": 2.0,
+            },
+        ],
+    )
     assert result["updated"] == 2
     assert result["rejected"] == 0
 
@@ -56,29 +77,73 @@ def test_valid_import_updates_hours(db_with_notes):
 
 
 def test_zero_hours_rejected(db_with_notes):
-    result = _run_import(db_with_notes, [
-        {"note_id": 1, "project_id": "P1", "note_type": "general", "note_title": "", "created_at": "", "note_text": "", "effort_hours": 0},
-    ])
+    result = _run_import(
+        db_with_notes,
+        [
+            {
+                "note_id": 1,
+                "project_id": "P1",
+                "note_type": "general",
+                "note_title": "",
+                "created_at": "",
+                "note_text": "",
+                "effort_hours": 0,
+            },
+        ],
+    )
     assert result["rejected"] == 1
     assert len(result["rejected_rows"]) == 1
 
 
 def test_empty_hours_rejected(db_with_notes):
-    result = _run_import(db_with_notes, [
-        {"note_id": 1, "project_id": "P1", "note_type": "general", "note_title": "", "created_at": "", "note_text": "", "effort_hours": ""},
-    ])
+    result = _run_import(
+        db_with_notes,
+        [
+            {
+                "note_id": 1,
+                "project_id": "P1",
+                "note_type": "general",
+                "note_title": "",
+                "created_at": "",
+                "note_text": "",
+                "effort_hours": "",
+            },
+        ],
+    )
     assert result["rejected"] == 1
 
 
 def test_nonexistent_note_id_rejected(db_with_notes):
-    result = _run_import(db_with_notes, [
-        {"note_id": 999, "project_id": "P1", "note_type": "general", "note_title": "", "created_at": "", "note_text": "", "effort_hours": 3.0},
-    ])
+    result = _run_import(
+        db_with_notes,
+        [
+            {
+                "note_id": 999,
+                "project_id": "P1",
+                "note_type": "general",
+                "note_title": "",
+                "created_at": "",
+                "note_text": "",
+                "effort_hours": 3.0,
+            },
+        ],
+    )
     assert result["rejected"] == 1
 
 
 def test_negative_hours_rejected(db_with_notes):
-    result = _run_import(db_with_notes, [
-        {"note_id": 1, "project_id": "P1", "note_type": "general", "note_title": "", "created_at": "", "note_text": "", "effort_hours": -1.5},
-    ])
+    result = _run_import(
+        db_with_notes,
+        [
+            {
+                "note_id": 1,
+                "project_id": "P1",
+                "note_type": "general",
+                "note_title": "",
+                "created_at": "",
+                "note_text": "",
+                "effort_hours": -1.5,
+            },
+        ],
+    )
     assert result["rejected"] == 1

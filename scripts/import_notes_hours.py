@@ -19,9 +19,7 @@ def import_hours(db_path: str, source: Union[str, io.StringIO]) -> dict:
     """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    existing_ids = {
-        r[0] for r in conn.execute("SELECT note_id FROM project_notes").fetchall()
-    }
+    existing_ids = {r[0] for r in conn.execute("SELECT note_id FROM project_notes").fetchall()}
 
     if isinstance(source, str):
         f = open(source, newline="", encoding="utf-8")

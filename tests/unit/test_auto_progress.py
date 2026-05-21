@@ -16,8 +16,7 @@ def test_auto_progress_project_with_6_month_duration():
     end_dt = today + timedelta(days=90)
     svc = _service()
     progress = svc.calculate_auto_progress(start_dt, end_dt)
-    assert 40 <= progress <= 60, \
-        f"Project at 50% of 180-day duration should show ~50%, not {progress}%"
+    assert 40 <= progress <= 60, f"Project at 50% of 180-day duration should show ~50%, not {progress}%"
 
 
 def test_auto_progress_new_project_long_duration():

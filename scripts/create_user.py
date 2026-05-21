@@ -22,16 +22,14 @@ from infra.db.adapter import PLACEHOLDER
 
 
 def _ensure_users_table(conn) -> None:
-    conn.execute(
-        f"""
+    conn.execute(f"""
         CREATE TABLE IF NOT EXISTS users (
             email TEXT PRIMARY KEY,
             password_hash TEXT NOT NULL,
             is_active INTEGER NOT NULL DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now'))
         )
-        """
-    )
+        """)
     conn.commit()
 
 
@@ -62,9 +60,7 @@ def deactivate_user(email: str) -> None:
 def list_users() -> None:
     with get_sqlite_conn(DB_PATH) as conn:
         _ensure_users_table(conn)
-        rows = conn.execute(
-            "SELECT email, is_active, created_at FROM users ORDER BY email"
-        ).fetchall()
+        rows = conn.execute("SELECT email, is_active, created_at FROM users ORDER BY email").fetchall()
     if not rows:
         print("No hay usuarios registrados.")
         return

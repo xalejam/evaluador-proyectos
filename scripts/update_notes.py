@@ -7,6 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 DB_PATH = ROOT / "project_viability.db"
 
+
 def update_notes():
     conn = sqlite3.connect(str(DB_PATH))
     cursor = conn.cursor()
@@ -35,6 +36,7 @@ def update_notes():
     conn.commit()
     conn.close()
     print("Updates completed successfully.")
+
 
 if __name__ == "__main__":
     update_notes()

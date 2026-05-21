@@ -10,6 +10,7 @@ def _reload_adapter(monkeypatch, url: str | None):
     else:
         monkeypatch.delenv("DATABASE_URL", raising=False)
     import infra.db.adapter as mod
+
     reload(mod)
     return mod
 
@@ -18,6 +19,7 @@ def test_adapter_local_mode_uses_sqlite(monkeypatch, tmp_path):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     db_file = tmp_path / "test.db"
     from infra.db.adapter import get_connection
+
     conn = get_connection(local_path=str(db_file))
     conn.execute("CREATE TABLE t (x INTEGER)")
     conn.execute("INSERT INTO t VALUES (1)")

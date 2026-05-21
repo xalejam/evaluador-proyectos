@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import streamlit as st
 
-
 STATUS_LABELS = {
     "evaluated": {"es": "Evaluado", "pt": "Avaliado", "en": "Evaluated"},
     "backlog": {

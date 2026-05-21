@@ -10,11 +10,23 @@ import pandas as pd
 import streamlit as st
 from ui.tabs.shared import t
 
-
 FORBIDDEN_SQL = [
-    "insert", "update", "delete", "drop", "alter", "create", "replace",
-    "truncate", "attach", "detach", "pragma", "vacuum", "reindex",
-    "begin", "commit", "rollback"
+    "insert",
+    "update",
+    "delete",
+    "drop",
+    "alter",
+    "create",
+    "replace",
+    "truncate",
+    "attach",
+    "detach",
+    "pragma",
+    "vacuum",
+    "reindex",
+    "begin",
+    "commit",
+    "rollback",
 ]
 
 
@@ -49,9 +61,7 @@ def render_sql_queries_tab():
     st.header(t("sql_tab_header"))
     st.caption(t("sql_tab_caption"))
 
-    st.markdown(
-        t("sql_available_tables_markdown")
-    )
+    st.markdown(t("sql_available_tables_markdown"))
 
     default_query = (
         "SELECT id, name, priority, viability_score, status\n"
@@ -92,8 +102,5 @@ def render_sql_queries_tab():
 
     csv_bytes = df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label=t("sql_download_csv_btn"),
-        data=io.BytesIO(csv_bytes),
-        file_name="sql_result.csv",
-        mime="text/csv"
+        label=t("sql_download_csv_btn"), data=io.BytesIO(csv_bytes), file_name="sql_result.csv", mime="text/csv"
     )

@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git checkout *)",
+      "Bash(.venv/Scripts/pytest tests/infra/test_folder_provisioner.py -v)",
+      "Bash(.venv/Scripts/pytest tests/infra/test_folder_provisioner.py -v -p no:cacheprovider)",
+      "Bash(.venv/Scripts/python -m pytest tests/infra/test_folder_provisioner.py -v)",
+      "Bash(python -c ' *)",
+      "Bash(.venv/Scripts/python -m pytest tests/infra/test_folder_provisioner.py -v --ignore=tests/conftest.py --override-ini=\"python_files=test_*.py\")",
+      "Bash(.venv/Scripts/python -c \"import infra.db.migrations; print\\('ok'\\)\")",
+      "Bash(.venv/Scripts/python -m pytest --version)",
+      "Bash(.venv/Scripts/python -c \"import pytest; print\\(pytest.__version__\\)\")",
+      "Bash(pip install *)",
+      "Bash(python *)",
+      "Bash(pytest tests/infra/test_db_adapter.py -v)",
+      "Bash(pytest tests/ -q)",
+      "Bash(New-Item -ItemType Directory -Path .streamlit -Force)",
+      "Bash(Out-Null)",
+      "Skill(code-review:code-review)",
+      "Bash(ls CLAUDE.md)",
+      "Bash(ls .claude/CLAUDE.md)",
+      "Bash(ls infra/CLAUDE.md)",
+      "Bash(ls ui/CLAUDE.md)",
+      "Bash(ls scripts/CLAUDE.md)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m black .)"
+    ]
+  }
+}

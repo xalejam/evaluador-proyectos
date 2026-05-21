@@ -1,4 +1,5 @@
 ﻿"""Conexión principal de base de datos — sqlite3 local o PostgreSQL en nube."""
+
 from __future__ import annotations
 from pathlib import Path
 from infra.db.adapter import get_connection, PLACEHOLDER, IS_CLOUD

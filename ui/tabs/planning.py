@@ -19,14 +19,15 @@ from infra.integrations.use_case_matrix_sync import (
     derive_matrix_answers as _derive_matrix_answers,
 )
 
+
 def calculate_average_hourly_rate():
     """Calcula la hora promedio de todos los proyectos en el Excel"""
     try:
         projects = st.session_state.excel_manager.get_all_projects()
         if not projects:
             return 25.0  # Valor por defecto si no hay proyectos
-        
-        total_rate = sum(p.get('avg_salary_per_hour', 25) for p in projects)
+
+        total_rate = sum(p.get("avg_salary_per_hour", 25) for p in projects)
         avg_rate = total_rate / len(projects)
         return round(avg_rate, 2)
     except:
@@ -136,7 +137,9 @@ def insert_project_evaluation_snapshot(
     conn.commit()
 
 
-def save_project(conn, payload: dict, status_after: str, loop_url_optional: str | None = None, developer_team: str = "") -> tuple:
+def save_project(
+    conn, payload: dict, status_after: str, loop_url_optional: str | None = None, developer_team: str = ""
+) -> tuple:
     """
     Persiste proyecto en projects con create/update y deja estado final.
     Retorna (project_id, calc_results, created_new).
@@ -176,9 +179,12 @@ def save_project(conn, payload: dict, status_after: str, loop_url_optional: str 
 
     return project_id, calc_results, created_new
 
+
 def render_planning_tab_old():
     """Compat legacy: delega al render actual de viabilidad."""
     return render_planning_tab()
+
+
 def render_planning_tab():
     """Renderiza tab de viabilidad (v2 con acciones separadas)."""
     st.header(t("viability_tab"))
@@ -303,11 +309,15 @@ def render_planning_tab():
             country_index = countries.index(current_country) if current_country in countries else 0
             project_country = st.selectbox(t("country_iso2"), countries, index=country_index)
         with col_meta2:
-            project_owner = st.text_input(
-                t("owner_label"),
-                value=(selected_project.get("owner", "") if selected_project else ""),
-                help=t("owner_help"),
-            ).strip().upper()
+            project_owner = (
+                st.text_input(
+                    t("owner_label"),
+                    value=(selected_project.get("owner", "") if selected_project else ""),
+                    help=t("owner_help"),
+                )
+                .strip()
+                .upper()
+            )
 
         st.subheader(t("current_situation"))
         c1, c2 = st.columns(2)
@@ -376,7 +386,9 @@ def render_planning_tab():
                     if scale_key != "Personalizado" and abs(get_scale_salary(scale_key) - current_dev_cost) < 1:
                         current_dev_scale_index = i
                         break
-                selected_dev_scale = st.selectbox(t("dev_salary_scale"), dev_scale_options, index=current_dev_scale_index)
+                selected_dev_scale = st.selectbox(
+                    t("dev_salary_scale"), dev_scale_options, index=current_dev_scale_index
+                )
                 if t("salary_custom") in selected_dev_scale:
                     development_cost_per_hour = st.number_input(
                         t("cost_per_hour"),
@@ -421,7 +433,9 @@ def render_planning_tab():
                 ),
             )
 
-        development_hours = locals().get("development_hours", int(selected_project["development_hours"]) if selected_project else 0)
+        development_hours = locals().get(
+            "development_hours", int(selected_project["development_hours"]) if selected_project else 0
+        )
         development_cost_per_hour = locals().get(
             "development_cost_per_hour",
             float(selected_project["development_cost_per_hour"]) if selected_project else 50.0,
@@ -432,14 +446,23 @@ def render_planning_tab():
         )
         implementation_complexity = locals().get(
             "implementation_complexity",
-            t("complexity_options")[int(selected_project["implementation_complexity"])] if selected_project else t("complexity_options")[1],
+            (
+                t("complexity_options")[int(selected_project["implementation_complexity"])]
+                if selected_project
+                else t("complexity_options")[1]
+            ),
         )
         risk_level = locals().get(
             "risk_level",
             t("risk_options")[int(selected_project["risk_level"])] if selected_project else t("risk_options")[1],
         )
-        developer_team = locals().get("developer_team", selected_project.get("developer_team", DEVELOPER_TEAMS[0]) if selected_project else DEVELOPER_TEAMS[0])
-        project_description = locals().get("project_description", selected_project["description"] if selected_project else "")
+        developer_team = locals().get(
+            "developer_team",
+            selected_project.get("developer_team", DEVELOPER_TEAMS[0]) if selected_project else DEVELOPER_TEAMS[0],
+        )
+        project_description = locals().get(
+            "project_description", selected_project["description"] if selected_project else ""
+        )
 
         complexity_value = int(str(implementation_complexity).split(" - ")[0])
         risk_value = int(str(risk_level).split(" - ")[0])
@@ -519,7 +542,11 @@ def render_planning_tab():
                 action = "recalc_saved" if is_existing else "evaluation_saved"
 
                 if approve_click:
-                    current_project = st.session_state.excel_manager.get_project(st.session_state.get("selected_project_id")) if is_existing else None
+                    current_project = (
+                        st.session_state.excel_manager.get_project(st.session_state.get("selected_project_id"))
+                        if is_existing
+                        else None
+                    )
                     current_state = (current_project or {}).get("status", "")
                     if current_state in ("executing", "implemented", "handed_off"):
                         status_after = current_state
@@ -573,11 +600,7 @@ def render_planning_tab():
                                     )
                                 )
                             else:
-                                st.warning(
-                                    t("folder_provisioned_warning").format(
-                                        error=prov_result.error
-                                    )
-                                )
+                                st.warning(t("folder_provisioned_warning").format(error=prov_result.error))
                         except Exception as prov_exc:
                             st.warning(t("folder_provisioned_warning").format(error=str(prov_exc)))
 

@@ -1,0 +1,67 @@
+﻿note_id,project_id,project_name,project_owner,project_members,author_actual,author_nuevo,effort_hours,note_type,created_at,note_text_preview
+117,HI-DDD-0001,SMART INTAKE DM ,DDD,Luis,Xiomara Monroy,Luis Astudillo,2,general,30/03/2026 19:17,Definición del proyecto
+133,HI-DDD-0001,SMART INTAKE DM ,DDD,Luis,Xiomara Monroy,Luis Astudillo,6,general,22/04/2026 22:22,Carlos avanzó parcialmente en la definición de reglas (master file e itemización
+150,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,0.5,general,11/02/2026 00:00,"Inicio formal del proyecto Copilot en LATAM. Se validó alcance, objetivos, metod"
+154,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,0.5,general,16/02/2026 09:00,Se revisa inclusión del equipo NOLA en el proyecto. Se confirma participación en
+158,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,0.5,general,16/02/2026 15:00,Se confirma inclusión al grupo Teams y acceso al calendario de cursos. Se habili
+162,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,0.5,general,17/02/2026 00:00,Se aclara que licencias ya fueron definidas fuera del alcance del PM. Las nuevas
+166,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,1,general,07/03/2026 00:00,Creación de Copilot para generar business case y aterrizar ideas del equipo.
+169,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Carlos Montiel,1,general,20/03/2026 00:00,Creación de business case con ideas que se podrían desarrollar.
+171,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,0.5,general,10/04/2026 00:00,Se presentan avances: +30 agentes y feedback del leadership. Se redefine foco ha
+193,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara Monroy,Xiomara Monroy,0.5,general,30/04/2026 16:42,Gonzalo presentó el plan de implementación para la gobernanza de IA que creó en 
+300,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,0.5,general,08/05/2026 16:05,Se presentaron los principales agentes al board recibiendo feedback y mejoras a 
+304,LA-COPILOT-0001,Implementación de Copilot,COPILOT,Xiomara,Xiomara,Xiomara Monroy,1,general,16/05/2026 16:05,PPT de casos de uso actualizado. Se identifico la necesidad de estructurar repos
+17,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,1,general,20/11/2025 13:37,"comienzo del proyecto.Definición del objetivo del agente, alcance y enfoque de v"
+25,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,1,general,05/12/2025 21:39,Diseño de los primeros prompts y reglas del agente. Definición de la estructura 
+29,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,0.5,general,15/01/2026 21:40,"Uso del agente en decks reales para validar claridad, utilidad y ahorro de tiemp"
+33,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,0.5,general,05/02/2026 21:40,"Ajuste de tono ejecutivo, consistencia de mensajes y mejora de outputs"
+37,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,1,general,05/03/2026 21:40,Piloto a mayor escala con el equipo comercial de CAM y equipos seleccionados de 
+113,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,0.5,general,25/03/2026 22:31,Se le solicitó a Olga Tercero apoyo para tener feedback de parte del equipo come
+142,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,1,general,22/04/2026 23:25,Se entregó el copiloto en el kick off de MX
+186,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,0.5,general,30/04/2026 16:28,Se envió a los CM el agente para que lo repartieran a sus equipos
+204,LA-DDD-0001,Client Title PPT,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,2,general,19/05/2026 19:27,Se presentó el agente a Chile y Argentina para que realicen sus pruebas
+45,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,1,general,30/01/2026 20:58,Kick-off y Definición
+49,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,4,general,07/02/2026 20:59,Diseño del Framework Base
+53,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,35,general,17/02/2026 21:01,Implementación Parte 1 (Presentaciones Fijas) - coppel
+57,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,35,general,23/02/2026 21:01,Se termina la primera parte con la semi automatizacion de coppel
+81,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,35,general,12/03/2026 21:27,Se agrega la funcionalidad de insertar texto y tablas
+183,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara Monroy,Xiomara Monroy,30,general,30/04/2026 16:27,Se esta configurando la presentación de Coppel con el texto a incluir en las dia
+288,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara,Xiomara Monroy,30,general,05/05/2026 16:05,Se avanza con la creacion del template de Coppel.
+292,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara,Xiomara Monroy,30,general,11/05/2026 16:05,Se avanza con la creacion del template de Coppel.
+296,LA-DDD-0002,Automatización Presentaciones Python,DDD,Xiomara,Xiomara,Xiomara Monroy,30,general,19/05/2026 16:05,Se termino de hacer la configuracion y se genero la PPT de Q4 para comparar vers
+1,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Xiomara Monroy,2,general,20/02/2026 16:19,"Alinear a todos los stakeholders sobre el objetivo, alcance y reporte esperado d"
+9,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,3,general,25/02/2026 16:19,"Evaluar la salud, complejidad y riesgo del VBA existente para dimensionar impact"
+13,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,1,general,02/03/2026 16:19,Decisión: Implementación principal en Python. 
+5,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,3,general,03/03/2026 16:19,"Comprender la estructura, contenido y variabilidad del nuevo input MYWorldpanel "
+61,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,8,general,09/03/2026 21:04,ya se programó la parte importante de los reportes y ya lee outputs de MWP. Esta
+89,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,4,general,13/03/2026 15:37,en etapa de evaluación eficiencia comparando los datos de la macro de VBA con la
+97,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,6,general,24/03/2026 22:46,Carlos corrigió errores encontrados y está ajustando la lógica y los datos para 
+129,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,6,general,31/03/2026 20:31,"Carlos terminó los ajustes principales (cálculos, formateos, conversion tree) y "
+146,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,5,general,22/04/2026 23:28,La macro está prácticamente cerrada. Carlos ya corrió nuevamente la comparación 
+179,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,4,general,28/04/2026 23:57,Carlos implementó un parche para variaciones de formato (cuando no viene la pala
+190,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara Monroy,Carlos Montiel,3,general,30/04/2026 16:36,Carlos hizo ajustes con el feedback de Suelen y se volvió a compartir el program
+228,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara,Carlos Montiel,3,general,05/05/2026 16:05,Se probaron los archivos reportados con errores y el codigo funciona correctamen
+232,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara,Carlos Montiel,2,general,11/05/2026 16:05,Se indico que el desarrollo pasara a etapa de pruebas por parte de D&D para su e
+236,MX-DDD-0001,Actualizacion Macro RCD colgate,DDD,Carlos,Xiomara,Carlos Montiel,2,general,19/05/2026 16:05,Programa final entregado a D&D para sus pruebas.
+65,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,3,general,20/02/2026 22:55,Idea y Exploración de lo que se requiere
+69,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,5,general,02/03/2026 22:55,Analizar estructura WPO y brechas vs Rotaciones
+73,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,6,general,06/03/2026 22:55,Definir reglas de negocio y diseño técnico
+77,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,10,general,09/03/2026 22:56,Desarrollo: Implementar transformación WPO → Rotaciones
+85,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,4,general,13/03/2026 15:34,Estamos ne etapas de prueba de producto
+93,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,3,general,24/03/2026 16:15,Se presentó al cliente y pidi0 cambios menores que deberían quedar esta semana
+125,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,2,general,31/03/2026 20:26,El desarrollo está terminado y Luis solo debe enviar la versión final al cliente
+141,MX-DDD-0003,Automatización Rotaciones MX,DDD,Luis,Xiomara Monroy,Luis Astudillo,1,general,22/04/2026 22:46,Realizar la sesión de entrega con el cliente. 
+101,MX-DDD-0004,Actualización VBA Walmart Frescos,DDD,Luis,Xiomara Monroy,Luis Astudillo,2,general,04/03/2026 22:05,Se realizó la reunión de kickoff el 3 de marzo de 2026 para definir el alcance d
+105,MX-DDD-0004,Actualización VBA Walmart Frescos,DDD,Luis,Xiomara Monroy,Luis Astudillo,8,general,16/03/2026 22:07,Durante la fase de desarrollo se realizaron ajustes sobre la macro existente par
+109,MX-DDD-0004,Actualización VBA Walmart Frescos,DDD,Luis,Xiomara Monroy,Luis Astudillo,4,general,25/03/2026 22:07,"Se iniciaron las pruebas funcionales de la macro, validando la ejecución complet"
+121,MX-DDD-0004,Actualización VBA Walmart Frescos,DDD,Luis,Xiomara Monroy,Luis Astudillo,2,general,31/03/2026 20:24,El proyecto fue entregado completamente y se está a la espera de feedback del cl
+137,MX-DDD-0004,Actualización VBA Walmart Frescos,DDD,Luis,Xiomara Monroy,Luis Astudillo,5,general,22/04/2026 22:37,Luis realizó correcciones a errores preexistentes y ajustes solicitados. Se modi
+175,MX-DDD-0004,Actualización VBA Walmart Frescos,DDD,Luis,Xiomara Monroy,Luis Astudillo,3,general,28/04/2026 23:56,Llegó feedback nuevamente con errores y aún no se ha revisado la causa de fondo.
+196,MX-DDD-0005,Automatización Order Forms MWP,DDD,"Luis, Xiomara",Xiomara Monroy,Xiomara Monroy,3,general,30/04/2026 17:20,Se acordó avanzar con la automatización del armado de Order Forms para eliminar 
+264,MX-DDD-0005,Automatización Order Forms MWP,DDD,"Luis, Xiomara",Xiomara,Luis Astudillo,8,general,05/05/2026 16:05,Se avanzo significativamente y es la prioridad actual del equipo. Se identifico 
+268,MX-DDD-0005,Automatización Order Forms MWP,DDD,"Luis, Xiomara",Xiomara,Luis Astudillo,6,general,11/05/2026 16:05,"El codigo esta refactorizado y se estan ajustando filtros, estructura de reposit"
+272,MX-DDD-0005,Automatización Order Forms MWP,DDD,"Luis, Xiomara",Xiomara,Luis Astudillo,5,general,18/05/2026 16:05,Se estan realizando ajustes para manejar filas incompletas y recuperar columnas 
+200,MX-DDD-0006,Usage OFW Nestlé,DDD,"Carlos, Xiomara",Xiomara Monroy,Xiomara Monroy,3,general,30/04/2026 19:01,Se acordó avanzar con el rediseño y automatización del reporte Usage OFW Nestlé 
+276,MX-DDD-0006,Usage OFW Nestlé,DDD,"Carlos, Xiomara",Xiomara,Xiomara Monroy,4,general,01/05/2026 16:05,Se genero un boceto con los comentarios de la reunion anterior.
+280,MX-DDD-0006,Usage OFW Nestlé,DDD,"Carlos, Xiomara",Xiomara,Xiomara Monroy,3,general,05/05/2026 16:05,Prototipos revisados con Advance y cambios de graficos quedaron del lado de ello
+284,MX-DDD-0006,Usage OFW Nestlé,DDD,"Carlos, Xiomara",Xiomara,Xiomara Monroy,4,general,18/05/2026 16:05,Se compartio un boceto en Power BI con el area comercial y se espera feedback.

@@ -24,3 +24,13 @@ Thumbs.db
 .env.*
 # Git worktrees
 .worktrees/
+# Streamlit secrets (nunca commitear)
+.streamlit/secrets.toml
+# Datos locales (nunca commitear)
+*.csv
+*.pptx
+*.db.bak
+# Claude Code config local
+.claude/settings.local.json
+# System prompts locales
+system_prompt_*.md

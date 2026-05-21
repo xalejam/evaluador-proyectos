@@ -6,6 +6,7 @@ Une todos los modulos: planificacion, seguimiento, dashboard, feedback y SQL.
 
 import streamlit as st
 from pathlib import Path
+from ui.login import render_login
 from ui.tabs.shared import t, init_excel_manager, render_language_selector, render_sidebar_stats
 from ui.state import init_state
 from ui.tabs.planning import render_planning_tab as render_viabilidad_tab
@@ -26,6 +27,9 @@ st.set_page_config(page_title="Evaluador de Viabilidad Bilingue", page_icon=":ab
 
 def main():
     """Funcion principal."""
+    if not render_login():
+        st.stop()
+
     # Inicializar sistema
     init_state()
     init_excel_manager()
@@ -48,6 +52,14 @@ def main():
 
     # Componentes del sidebar
     render_sidebar_stats()
+
+    # Cerrar sesión
+    st.sidebar.divider()
+    user_email = st.session_state.get("user_email", "")
+    st.sidebar.caption(f"Sesión: {user_email}")
+    if st.sidebar.button("Cerrar sesión"):
+        st.session_state.clear()
+        st.rerun()
 
     # Pestanas principales
     tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(

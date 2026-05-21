@@ -1,45 +1,57 @@
-"""Migraciones idempotentes para SQLite (project_viability.db)."""
+"""Migraciones idempotentes para SQLite (local) y PostgreSQL (nube)."""
 
 from __future__ import annotations
 
-import sqlite3
 from typing import Iterable
+
+from infra.db.adapter import get_connection, IS_CLOUD, PLACEHOLDER
 
 DB_PATH = "project_viability.db"
 
 
-def get_conn(db_path: str = DB_PATH) -> sqlite3.Connection:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    return conn
+def get_conn(db_path: str = DB_PATH):
+    return get_connection(local_path=db_path)
 
 
-def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
-        (table_name,),
-    ).fetchone()
+def _table_exists(conn, table_name: str) -> bool:
+    if IS_CLOUD:
+        row = conn.execute(
+            "SELECT table_name FROM information_schema.tables " "WHERE table_schema='public' AND table_name=%s LIMIT 1",
+            (table_name,),
+        ).fetchone()
+    else:
+        row = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name=? LIMIT 1",
+            (table_name,),
+        ).fetchone()
     return row is not None
 
 
-def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+def _table_columns(conn, table_name: str) -> set[str]:
     if not _table_exists(conn, table_name):
         return set()
-    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
-    return {row[1] for row in rows}
+    if IS_CLOUD:
+        rows = conn.execute(
+            "SELECT column_name FROM information_schema.columns " "WHERE table_schema='public' AND table_name=%s",
+            (table_name,),
+        ).fetchall()
+        return {r[0] for r in rows}
+    else:
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        return {row[1] for row in rows}
 
 
-def _add_column_if_missing(conn: sqlite3.Connection, table: str, column_def: str) -> None:
+def _add_column_if_missing(conn, table: str, column_def: str) -> None:
     col_name = column_def.strip().split()[0]
     if col_name not in _table_columns(conn, table):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
 
 
-def _ensure_index(conn: sqlite3.Connection, sql: str) -> None:
+def _ensure_index(conn, sql: str) -> None:
     conn.execute(sql)
 
 
-def _ensure_projects_base_table(conn: sqlite3.Connection) -> None:
+def _ensure_projects_base_table(conn) -> None:
     """Crea projects con esquema compatible si no existe."""
     conn.execute("""
         CREATE TABLE IF NOT EXISTS projects (
@@ -84,8 +96,12 @@ def _ensure_projects_base_table(conn: sqlite3.Connection) -> None:
         """)
 
 
-def ensure_projects_schema(conn: sqlite3.Connection) -> None:
+def ensure_projects_schema(conn) -> None:
     """Asegura columnas y defaults necesarios en projects."""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return
     _ensure_projects_base_table(conn)
 
     _add_column_if_missing(conn, "projects", "project_id TEXT")
@@ -101,7 +117,7 @@ def ensure_projects_schema(conn: sqlite3.Connection) -> None:
     if "updated_at" not in _table_columns(conn, "projects"):
         try:
             conn.execute("ALTER TABLE projects ADD COLUMN updated_at TEXT DEFAULT (datetime('now'))")
-        except sqlite3.OperationalError:
+        except Exception:
             conn.execute("ALTER TABLE projects ADD COLUMN updated_at TEXT")
 
     # Compatibilidad: espejar id -> project_id cuando falte.
@@ -119,8 +135,12 @@ def ensure_projects_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def ensure_evaluations_schema(conn: sqlite3.Connection) -> None:
+def ensure_evaluations_schema(conn) -> None:
     """Tabla append-only para historial de evaluaciones."""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS project_evaluations (
             evaluation_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -163,7 +183,7 @@ def ensure_evaluations_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def _create_notes_views(conn: sqlite3.Connection) -> None:
+def _create_notes_views(conn) -> None:
     conn.execute("DROP VIEW IF EXISTS v_project_latest_notes")
     conn.execute("DROP VIEW IF EXISTS v_project_last_note")
     conn.execute("DROP VIEW IF EXISTS v_project_progress_history")
@@ -201,7 +221,7 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             )
             WHERE rn = 1
             """)
-    except sqlite3.OperationalError:
+    except Exception:
         conn.execute("""
             CREATE VIEW v_project_latest_notes AS
             SELECT
@@ -273,7 +293,7 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             WHERE x.rn = 1
             ORDER BY x.project_id, datetime(x.created_at) DESC, x.note_id DESC
             """)
-    except sqlite3.OperationalError:
+    except Exception:
         # Compatibilidad con engines viejos de SQLite sin funciones avanzadas.
         conn.execute("""
             CREATE VIEW v_project_progress_history AS
@@ -292,8 +312,12 @@ def _create_notes_views(conn: sqlite3.Connection) -> None:
             """)
 
 
-def ensure_notes_schema(conn: sqlite3.Connection) -> None:
+def ensure_notes_schema(conn) -> None:
     """Asegura esquema de notas inmutables + vistas."""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS project_notes (
             note_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -330,17 +354,17 @@ def ensure_notes_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def update_project_status(conn: sqlite3.Connection, project_id: str, status: str) -> None:
+def update_project_status(conn, project_id: str, status: str) -> None:
     conn.execute(
-        "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ? OR project_id = ?",
+        f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = datetime('now') WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
         (status.strip(), project_id.strip(), project_id.strip()),
     )
     if status.strip() == "implemented":
         conn.execute(
-            """
+            f"""
             UPDATE projects
             SET closed_at = datetime('now')
-            WHERE (id = ? OR project_id = ?)
+            WHERE (id = {PLACEHOLDER} OR project_id = {PLACEHOLDER})
               AND (closed_at IS NULL OR closed_at = '')
             """,
             (project_id.strip(), project_id.strip()),
@@ -348,8 +372,12 @@ def update_project_status(conn: sqlite3.Connection, project_id: str, status: str
     conn.commit()
 
 
-def ensure_members_schema(conn: sqlite3.Connection) -> None:
+def ensure_members_schema(conn) -> None:
     """Crea tabla project_members si no existe."""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return
     conn.execute("""
         CREATE TABLE IF NOT EXISTS project_members (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -366,41 +394,45 @@ def ensure_members_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def get_project_members(conn: sqlite3.Connection, project_id: str) -> list[str]:
+def get_project_members(conn, project_id: str) -> list[str]:
     """Retorna lista de nombres de miembros para un proyecto."""
     rows = conn.execute(
-        "SELECT member_name FROM project_members WHERE project_id = ? ORDER BY added_at",
+        f"SELECT member_name FROM project_members WHERE project_id = {PLACEHOLDER} ORDER BY added_at",
         (project_id,),
     ).fetchall()
     return [r[0] for r in rows]
 
 
-def add_project_member(conn: sqlite3.Connection, project_id: str, member_name: str) -> None:
+def add_project_member(conn, project_id: str, member_name: str) -> None:
     """Agrega un miembro a un proyecto. Ignora duplicados silenciosamente."""
     conn.execute(
-        "INSERT OR IGNORE INTO project_members (project_id, member_name) VALUES (?, ?)",
+        f"INSERT OR IGNORE INTO project_members (project_id, member_name) VALUES ({PLACEHOLDER}, {PLACEHOLDER})",
         (project_id.strip(), member_name.strip()),
     )
     conn.commit()
 
 
-def remove_project_member(conn: sqlite3.Connection, project_id: str, member_name: str) -> None:
+def remove_project_member(conn, project_id: str, member_name: str) -> None:
     """Elimina un miembro de un proyecto."""
     conn.execute(
-        "DELETE FROM project_members WHERE project_id = ? AND member_name = ?",
+        f"DELETE FROM project_members WHERE project_id = {PLACEHOLDER} AND member_name = {PLACEHOLDER}",
         (project_id.strip(), member_name.strip()),
     )
     conn.commit()
 
 
-def get_all_known_members(conn: sqlite3.Connection) -> list[str]:
+def get_all_known_members(conn) -> list[str]:
     """Retorna todos los nombres de miembros únicos en toda la BD (para sugerencias)."""
     rows = conn.execute("SELECT DISTINCT member_name FROM project_members ORDER BY member_name").fetchall()
     return [r[0] for r in rows]
 
 
-def ensure_all_operational_schema(conn: sqlite3.Connection) -> None:
+def ensure_all_operational_schema(conn) -> None:
     """Atajo para asegurar esquemas de projects/evaluations/notes."""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return  # Schema ya existe en Supabase, creado manualmente via SQL Editor
     ensure_projects_schema(conn)
     ensure_evaluations_schema(conn)
     ensure_notes_schema(conn)

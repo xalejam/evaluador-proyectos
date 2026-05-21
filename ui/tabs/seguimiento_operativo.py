@@ -273,6 +273,9 @@ def _create_views(conn: sqlite3.Connection) -> None:
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     """Crea esquema base y aplica migraciones/vistas."""
+    from infra.db.adapter import IS_CLOUD
+    if IS_CLOUD:
+        return  # Schema ya existe en Supabase
     conn.execute("""
         CREATE TABLE IF NOT EXISTS project_notes (
             note_id INTEGER PRIMARY KEY AUTOINCREMENT,

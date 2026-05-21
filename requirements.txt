@@ -7,3 +7,5 @@ numpy
 SQLAlchemy
 requests
 requests-ntlm
+psycopg2-binary
+bcrypt

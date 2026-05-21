@@ -19,3 +19,12 @@ def test_adapter_placeholder_local(monkeypatch):
     import infra.db.adapter as mod
     reload(mod)
     assert mod.PLACEHOLDER == "?"
+
+def test_adapter_placeholder_cloud(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql://fake:fake@localhost/fake")
+    from importlib import reload
+    import infra.db.adapter as mod
+    reload(mod)
+    assert mod.PLACEHOLDER == "%s"
+    assert mod.IS_CLOUD is True
+    reload(mod)  # restaurar estado original

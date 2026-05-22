@@ -17,7 +17,9 @@ def _load_projects_from_db() -> list[dict]:
         try:
             rows = conn.execute("SELECT * FROM projects WHERE status IS NOT NULL ORDER BY updated_at DESC").fetchall()
             return [dict(r) for r in rows]
-        except Exception:
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error("Error cargando proyectos: %s", e, exc_info=True)
             return []
 
 

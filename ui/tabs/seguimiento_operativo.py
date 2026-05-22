@@ -1688,9 +1688,12 @@ def render_seguimiento_operativo() -> None:
     st.caption(t("ops_tab_caption"))
 
     try:
-        with get_conn(DB_PATH) as conn:
-            ensure_schema(conn)
-            ensure_members_schema(conn)
+        from infra.db.adapter import IS_CLOUD
+
+        if not IS_CLOUD:
+            with get_conn(DB_PATH) as conn:
+                ensure_schema(conn)
+                ensure_members_schema(conn)
     except Exception as exc:
         st.error(f"{t('ops_schema_init_error')}: {exc}")
         return

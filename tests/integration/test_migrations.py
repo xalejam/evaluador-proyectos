@@ -1,5 +1,4 @@
-﻿
-from infra.db.migrations import ensure_schema
+﻿from infra.db.migrations import ensure_schema
 
 
 def test_ensure_schema_idempotent(temp_db_conn):

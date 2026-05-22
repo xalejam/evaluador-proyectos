@@ -7,9 +7,7 @@ Fuente única de verdad: project_viability.db.
 
 from __future__ import annotations
 
-import sqlite3
 from datetime import date
-from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
@@ -18,10 +16,11 @@ import streamlit as st
 
 from domain.matrix import classify_quadrant
 from infra.config_loader import ConfigLoader
+from infra.db.adapter import PLACEHOLDER, db_now, db_table_columns, db_table_exists
 from infra.db.connection import get_sqlite_conn as get_conn
-from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
-from ui.tabs.shared import t
+from infra.db.migrations import ensure_evaluations_schema, ensure_projects_schema
 from ui.i18n_labels import label_status
+from ui.tabs.shared import t
 
 PV_DB_PATH = "project_viability.db"
 VALID_STATUSES = (
@@ -38,22 +37,15 @@ VALID_STATUSES = (
 VALID_TEAMS = ("NOLA", "Brazil", "Champions", "Other")
 
 
-def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
-    row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
-        (table_name,),
-    ).fetchone()
-    return row is not None
+def _table_exists(conn, table_name: str) -> bool:
+    return db_table_exists(conn, table_name)
 
 
-def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
-    if not _table_exists(conn, table_name):
-        return set()
-    rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
-    return {row["name"] for row in rows}
+def _table_columns(conn, table_name: str) -> set[str]:
+    return db_table_columns(conn, table_name)
 
 
-def _add_column_if_missing(conn: sqlite3.Connection, table: str, column_def: str) -> None:
+def _add_column_if_missing(conn, table: str, column_def: str) -> None:
     col_name = column_def.strip().split()[0]
     if col_name not in _table_columns(conn, table):
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column_def}")
@@ -160,8 +152,8 @@ def _export_buttons(df: pd.DataFrame, prefix: str) -> None:
 def update_status(project_id: str, new_status: str) -> None:
     with get_conn(PV_DB_PATH) as conn:
         conn.execute(
-            "UPDATE projects SET status = ?, updated_at = datetime('now') WHERE id = ? OR project_id = ?",
-            (new_status, project_id, project_id),
+            f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = {PLACEHOLDER} WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
+            (new_status, db_now(), project_id, project_id),
         )
         conn.commit()
 
@@ -309,7 +301,6 @@ def render_use_case_matrix_tab() -> None:
 
         change_options = list(VALID_STATUSES)
         curr_status = str(detail.get("status") or "evaluated")
-        idx = change_options.index(curr_status) if curr_status in change_options else 0
         new_status_labels = [label_status(s) for s in change_options]
         current_label = label_status(curr_status)
         idx_label = new_status_labels.index(current_label) if current_label in new_status_labels else 0

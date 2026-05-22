@@ -3,12 +3,13 @@
 Módulo de dashboard con métricas generales y visualizaciones
 """
 
-import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
+import streamlit as st
+
+from infra.db.connection import DB_PATH as PV_DB_PATH
+from infra.db.connection import get_sqlite_conn
 from ui.tabs.shared import t
-from infra.db.connection import get_sqlite_conn, DB_PATH as PV_DB_PATH
 
 
 def _load_projects_from_db() -> list[dict]:
@@ -19,6 +20,7 @@ def _load_projects_from_db() -> list[dict]:
             return [dict(r) for r in rows]
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).error("Error cargando proyectos: %s", e, exc_info=True)
             return []
 

@@ -23,7 +23,7 @@ def _get_user(email: str) -> dict | None:
         ).fetchone()
     if row is None:
         return None
-    return {"email": row[0], "password_hash": row[1], "is_active": row[2]}
+    return {"email": row["email"], "password_hash": row["password_hash"], "is_active": row["is_active"]}
 
 
 def render_login() -> bool:

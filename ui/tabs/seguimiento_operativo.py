@@ -17,6 +17,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from infra.db.adapter import PLACEHOLDER
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.presentation_ports import (
     InMemoryDestination,
@@ -347,7 +348,7 @@ def fetch_projects(conn: sqlite3.Connection, eligible_statuses: tuple[str, ...])
     artifacts_type_expr = "artifacts_type" if "artifacts_type" in cols else "''"
     tech_stack_expr = "tech_stack" if "tech_stack" in cols else "''"
 
-    placeholders = ",".join(["?"] * len(eligible_statuses))
+    placeholders = ",".join([PLACEHOLDER] * len(eligible_statuses))
     query = f"""
         SELECT
             {id_col} AS project_id,
@@ -637,7 +638,7 @@ def get_workload_df(conn: sqlite3.Connection, statuses: list[str]) -> pd.DataFra
     """Retorna DataFrame con carga por miembro: member_name, project_id, name, status, total_hours."""
     if not statuses:
         return pd.DataFrame(columns=["member_name", "project_id", "name", "status", "total_hours"])
-    placeholders = ",".join(["?"] * len(statuses))
+    placeholders = ",".join([PLACEHOLDER] * len(statuses))
     rows = conn.execute(
         f"""
         SELECT

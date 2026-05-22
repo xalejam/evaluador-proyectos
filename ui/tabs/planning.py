@@ -3,21 +3,22 @@
 Módulo de planificación de proyectos con botones separados de Calcular y Guardar
 """
 
-import streamlit as st
-import plotly.graph_objects as go
 import json
-from ui.tabs.shared import t, get_scale_salary
-from ui.i18n_labels import get_lang, help_statuses, label_status
-from infra.config_loader import ConfigLoader, load_app_config as _load_app_config
+
+import plotly.graph_objects as go
+import streamlit as st
+
+from infra.config_loader import ConfigLoader
+from infra.config_loader import load_app_config as _load_app_config
+from infra.db.adapter import PLACEHOLDER, db_now, db_table_columns
 from infra.db.connection import get_sqlite_conn as get_conn
-from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
+from infra.db.migrations import ensure_evaluations_schema, ensure_projects_schema
 from infra.folder_provisioner import load_provisioner_from_config
 from infra.integrations.use_case_matrix_sync import (
     sync_to_use_case_matrix,
-    clamp_score as _clamp_score,
-    score_from_thresholds as _score_from_thresholds,
-    derive_matrix_answers as _derive_matrix_answers,
 )
+from ui.i18n_labels import get_lang, help_statuses, label_status
+from ui.tabs.shared import get_scale_salary, t
 
 
 def calculate_average_hourly_rate():
@@ -30,7 +31,7 @@ def calculate_average_hourly_rate():
         total_rate = sum(p.get("avg_salary_per_hour", 25) for p in projects)
         avg_rate = total_rate / len(projects)
         return round(avg_rate, 2)
-    except:
+    except Exception:
         return 25.0  # Valor por defecto en caso de error
 
 
@@ -155,26 +156,24 @@ def save_project(
     else:
         project_id, calc_results = calculator.update_project(existing_id, payload)
 
-    projects_cols = {row["name"] for row in conn.execute("PRAGMA table_info(projects)").fetchall()}
-    updates = {"status": status_after, "updated_at": "datetime('now')", "project_id": project_id}
+    projects_cols = db_table_columns(conn, "projects")
+    updates = {"status": status_after, "project_id": project_id}
 
     if "loop_url" in projects_cols and loop_url_optional is not None:
         updates["loop_url"] = loop_url_optional.strip()
     if "developer_team" in projects_cols:
         updates["developer_team"] = (developer_team or "").strip()
 
-    set_parts = []
-    params = []
+    set_parts = [f"updated_at = {PLACEHOLDER}"]
+    params = [db_now()]
     for key, val in updates.items():
-        if key == "updated_at" and val == "datetime('now')":
-            set_parts.append("updated_at = datetime('now')")
-        elif key in projects_cols:
-            set_parts.append(f"{key} = ?")
+        if key in projects_cols:
+            set_parts.append(f"{key} = {PLACEHOLDER}")
             params.append(val)
 
     if set_parts:
         params.append(project_id)
-        conn.execute(f"UPDATE projects SET {', '.join(set_parts)} WHERE id = ?", params)
+        conn.execute(f"UPDATE projects SET {', '.join(set_parts)} WHERE id = {PLACEHOLDER}", params)
         conn.commit()
 
     return project_id, calc_results, created_new

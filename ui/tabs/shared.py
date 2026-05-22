@@ -3,22 +3,21 @@
 Módulo compartido con traducciones, clases principales y funciones utilitarias
 """
 
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, date
 import io
-import uuid
-import os
-import sqlite3
 import json
+import os
 import re
+import sqlite3
+import uuid
+from datetime import datetime
+
+import pandas as pd
+import streamlit as st
 
 # =============================================================================
 # TRADUCCIONES / TRANSLATIONS — re-exported from ui.i18n (source of truth)
 # =============================================================================
-from ui.i18n import TRANSLATIONS, t, get_language  # noqa: F401, E402
+from ui.i18n import TRANSLATIONS, get_language, t  # noqa: F401, E402
 
 _TRANSLATIONS_LEGACY = {
     "es": {
@@ -1156,7 +1155,11 @@ class ExcelSharePointManager:
 
     def _ensure_projects_schema(self, conn):
         """Agrega columnas faltantes en instalaciones existentes."""
-        existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(projects)").fetchall()}
+        from infra.db.adapter import IS_CLOUD, db_table_columns
+
+        if IS_CLOUD:
+            return  # Schema ya existe en Supabase
+        existing_cols = db_table_columns(conn, "projects")
         required_cols = {
             "country": "TEXT",
             "owner": "TEXT",

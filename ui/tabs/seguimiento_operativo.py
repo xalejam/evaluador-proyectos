@@ -90,7 +90,12 @@ def _connect(path: str = DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+def _table_exists(conn, table_name: str) -> bool:
+    from infra.db.adapter import IS_CLOUD
+    from infra.db.adapter import db_table_exists as _db_table_exists
+
+    if IS_CLOUD:
+        return _db_table_exists(conn, table_name)
     row = conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
         (table_name,),
@@ -98,19 +103,32 @@ def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
     return row is not None
 
 
-def _table_columns(conn: sqlite3.Connection, table_name: str) -> set[str]:
+def _table_columns(conn, table_name: str) -> set[str]:
+    from infra.db.adapter import IS_CLOUD
+    from infra.db.adapter import db_table_columns as _db_table_columns
+
+    if IS_CLOUD:
+        return _db_table_columns(conn, table_name)
     if not _table_exists(conn, table_name):
         return set()
     rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
     return {row["name"] for row in rows}
 
 
-def _project_id_column(conn: sqlite3.Connection) -> str:
+def _project_id_column(conn) -> str:
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return "project_id"
     cols = _table_columns(conn, "projects")
     return "project_id" if "project_id" in cols else "id"
 
 
-def _project_time_columns(conn: sqlite3.Connection) -> tuple[str, str]:
+def _project_time_columns(conn) -> tuple[str, str]:
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return "created_date", "updated_at"
     cols = _table_columns(conn, "projects")
     created_col = "created_at" if "created_at" in cols else "created_date"
     updated_col = "updated_at" if "updated_at" in cols else created_col

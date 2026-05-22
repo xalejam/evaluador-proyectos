@@ -1,7 +1,7 @@
 import sqlite3
-import tempfile
-from infra.db_migrations import ensure_all_operational_schema
+
 from infra.db.repositories.project_repo import ProjectRepository
+from infra.db_migrations import ensure_all_operational_schema
 
 
 def test_dashboard_projects_come_from_sqlite(tmp_path):

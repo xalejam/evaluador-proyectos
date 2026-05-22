@@ -1,12 +1,14 @@
 import sqlite3
+
 import pytest
+
 from infra.db_migrations import (
-    ensure_projects_schema,
-    ensure_members_schema,
-    get_project_members,
     add_project_member,
-    remove_project_member,
+    ensure_members_schema,
+    ensure_projects_schema,
     get_all_known_members,
+    get_project_members,
+    remove_project_member,
 )
 
 
@@ -66,12 +68,11 @@ def test_get_all_known_members_returns_unique_names(conn):
     assert sorted(names) == ["Ana", "Xiomara"]
 
 
-import pandas as pd
-import sys
-from pathlib import Path
+import sys  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
-from infra.db_migrations import ensure_notes_schema
+from infra.db_migrations import ensure_notes_schema  # noqa: E402
 
 
 @pytest.fixture

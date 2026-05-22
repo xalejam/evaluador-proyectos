@@ -1,8 +1,8 @@
 from domain.exceptions import (
-    EvaluadorError,
-    ProjectNotFoundError,
     DuplicateProjectError,
+    EvaluadorError,
     InvalidStatusTransitionError,
+    ProjectNotFoundError,
     ValidationError,
 )
 

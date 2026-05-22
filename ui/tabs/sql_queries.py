@@ -6,8 +6,10 @@ import io
 import re
 import sqlite3
 from pathlib import Path
+
 import pandas as pd
 import streamlit as st
+
 from ui.tabs.shared import t
 
 FORBIDDEN_SQL = [

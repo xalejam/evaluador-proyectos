@@ -1,6 +1,7 @@
+import os
 import sqlite3
 import tempfile
-import os
+
 from infra.db_migrations import ensure_all_operational_schema
 
 

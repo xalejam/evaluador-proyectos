@@ -5,9 +5,13 @@ from __future__ import annotations
 import sqlite3
 
 from infra.db_migrations import (
-    ensure_projects_schema as _ensure_projects_schema,
-    ensure_notes_schema as _ensure_notes_schema,
     ensure_evaluations_schema as _ensure_evaluations_schema,
+)
+from infra.db_migrations import (
+    ensure_notes_schema as _ensure_notes_schema,
+)
+from infra.db_migrations import (
+    ensure_projects_schema as _ensure_projects_schema,
 )
 
 

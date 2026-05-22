@@ -1,6 +1,8 @@
-import pytest
 import logging
 from unittest.mock import patch
+
+import pytest
+
 from infra.config_loader import load_app_config
 from infra.folder_provisioner import LocalFolderProvisioner
 

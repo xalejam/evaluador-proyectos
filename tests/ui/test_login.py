@@ -1,5 +1,4 @@
 import bcrypt
-import pytest
 
 
 def _make_hash(password: str) -> str:

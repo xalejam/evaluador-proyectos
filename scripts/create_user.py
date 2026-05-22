@@ -16,13 +16,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import bcrypt
-from infra.db.connection import get_sqlite_conn, DB_PATH
-from infra.db.adapter import PLACEHOLDER
+import bcrypt  # noqa: E402
+
+from infra.db.adapter import PLACEHOLDER  # noqa: E402
+from infra.db.connection import DB_PATH, get_sqlite_conn  # noqa: E402
 
 
 def _ensure_users_table(conn) -> None:
-    conn.execute(f"""
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             email TEXT PRIMARY KEY,
             password_hash TEXT NOT NULL,

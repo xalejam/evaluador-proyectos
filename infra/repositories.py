@@ -1,10 +1,10 @@
 """Repositorios para acceso a datos de Use Case Matrix."""
 
-from datetime import datetime
 import re
+from datetime import datetime
 
 from sqlalchemy import select, update
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from domain.models import Evaluation, MatrixPoint, Project
 from infra.db import EvaluationORM, ProjectORM

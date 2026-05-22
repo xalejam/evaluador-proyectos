@@ -35,7 +35,7 @@ class ProjectViabilityCalculator:
         dev_cost_per_hour = _f(project_data.get("development_cost_per_hour"))
         maintenance_monthly = _f(project_data.get("maintenance_monthly"))
 
-        total_hours_per_month = current_time * tasks_per_month * staff_count
+        total_hours_per_month = current_time * tasks_per_month * staff_count  # noqa: F841
         time_saved = current_time * time_reduction_pct / 100
         hours_saved_per_month = time_saved * tasks_per_month * staff_count
         monthly_savings = hours_saved_per_month * avg_salary

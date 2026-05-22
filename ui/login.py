@@ -1,10 +1,12 @@
 """Pantalla de login y lógica de autenticación."""
 
 from __future__ import annotations
+
 import bcrypt
 import streamlit as st
-from infra.db.connection import get_sqlite_conn, DB_PATH
+
 from infra.db.adapter import PLACEHOLDER
+from infra.db.connection import DB_PATH, get_sqlite_conn
 
 
 def verify_password(plain: str, hashed: str) -> bool:

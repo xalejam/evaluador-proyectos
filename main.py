@@ -4,20 +4,22 @@ Archivo principal del Sistema de Evaluacion de Viabilidad - Bilingue
 Une todos los modulos: planificacion, seguimiento, dashboard, feedback y SQL.
 """
 
-import streamlit as st
 from pathlib import Path
+
+import streamlit as st
+
+from infra.db.connection import DB_PATH, get_sqlite_conn
+from infra.db_migrations import ensure_all_operational_schema
 from ui.login import render_login
-from ui.tabs.shared import t, init_excel_manager, render_language_selector, render_sidebar_stats
 from ui.state import init_state
-from ui.tabs.planning import render_planning_tab as render_viabilidad_tab
-from ui.tabs.tracking import render_tracking_tab as render_post_impl_tab
 from ui.tabs.dashboard import render_dashboard as render_dashboard_tab
 from ui.tabs.feedback_processor import render_feedback_processor as render_feedback_tab
-from ui.tabs.sql_queries import render_sql_queries_tab as render_sql_tab
-from ui.use_case_matrix import render_use_case_matrix_tab
+from ui.tabs.planning import render_planning_tab as render_viabilidad_tab
 from ui.tabs.seguimiento_operativo import render_seguimiento_operativo as render_seguimiento_operativo_tab
-from infra.db_migrations import ensure_all_operational_schema
-from infra.db.connection import get_sqlite_conn, DB_PATH
+from ui.tabs.shared import init_excel_manager, render_language_selector, render_sidebar_stats, t
+from ui.tabs.sql_queries import render_sql_queries_tab as render_sql_tab
+from ui.tabs.tracking import render_tracking_tab as render_post_impl_tab
+from ui.use_case_matrix import render_use_case_matrix_tab
 
 ROOT = Path(__file__).resolve().parent
 

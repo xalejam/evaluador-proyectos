@@ -16,15 +16,17 @@ from typing import Any
 
 import pandas as pd
 import streamlit as st
+
 from infra.db.connection import get_sqlite_conn as get_conn
-from infra.db.migrations import ensure_schema
 from infra.presentation_ports import (
     InMemoryDestination,
     SqliteDataSource,
+)
+from infra.presentation_ports import (
     build_presentation_bytes as _build_pptx_bytes,
 )
-from ui.tabs.shared import t
 from ui.i18n_labels import label_note_type, label_status
+from ui.tabs.shared import t
 
 # Configuracion (editable)
 DB_PATH = "project_viability.db"
@@ -274,6 +276,7 @@ def _create_views(conn: sqlite3.Connection) -> None:
 def ensure_schema(conn: sqlite3.Connection) -> None:
     """Crea esquema base y aplica migraciones/vistas."""
     from infra.db.adapter import IS_CLOUD
+
     if IS_CLOUD:
         return  # Schema ya existe en Supabase
     conn.execute("""
@@ -420,12 +423,12 @@ def _tech_stack_label(code: str) -> str:
 
 
 from infra.db_migrations import (  # noqa: E402
-    update_project_status,
-    get_project_members,
     add_project_member,
-    remove_project_member,
-    get_all_known_members,
     ensure_members_schema,
+    get_all_known_members,
+    get_project_members,
+    remove_project_member,
+    update_project_status,
 )
 
 

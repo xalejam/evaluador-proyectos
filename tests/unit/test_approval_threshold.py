@@ -1,7 +1,9 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from domain.services.viability_service import ViabilityService
+
 from domain.exceptions import ValidationError
+from domain.services.viability_service import ViabilityService
 
 
 def _make_svc():

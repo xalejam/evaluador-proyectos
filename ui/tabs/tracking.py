@@ -3,13 +3,15 @@
 Módulo de seguimiento post-implementación con procesamiento automático de encuestas
 """
 
-import streamlit as st
-import plotly.graph_objects as go
-import pandas as pd
 import os
-from ui.tabs.shared import t
-from ui.tabs.feedback_processor import FeedbackProcessor
+
+import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
+
 from ui.calculator import _f
+from ui.tabs.feedback_processor import FeedbackProcessor
+from ui.tabs.shared import t
 
 
 def auto_process_feedback():

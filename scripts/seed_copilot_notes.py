@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from infra.db.connection import get_sqlite_conn
+from infra.db.connection import get_sqlite_conn  # noqa: E402
 
 PROJECT_ID = "LA-COPILOT-0001"
 AUTHOR = "Xiomara"

@@ -4,11 +4,10 @@
 import json
 import sys
 from pathlib import Path
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from infra.folder_provisioner import load_provisioner_from_config, FolderColor
+from infra.folder_provisioner import FolderColor, load_provisioner_from_config
 
 
 def test_load_from_real_config_and_provision(tmp_path):

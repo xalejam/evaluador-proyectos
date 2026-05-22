@@ -1,5 +1,4 @@
-﻿import sqlite3
-
+﻿
 from infra.db.migrations import ensure_schema
 
 

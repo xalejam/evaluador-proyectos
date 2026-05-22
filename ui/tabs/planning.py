@@ -110,13 +110,13 @@ def insert_project_evaluation_snapshot(
     complexity_score = _complexity_points(int(inputs_dict.get("implementation_complexity", 3) or 3))
 
     conn.execute(
-        """
+        f"""
         INSERT INTO project_evaluations (
             project_id, created_by, action, status_after,
             score_total, score_impact, score_risk, score_complexity,
             monthly_savings, annual_savings, payback_period_months, roi_first_year,
             hours_saved_per_month, inputs_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES ({", ".join([PLACEHOLDER] * 14)})
         """,
         (
             project_id,

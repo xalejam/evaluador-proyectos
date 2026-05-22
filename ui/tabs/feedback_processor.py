@@ -3,12 +3,11 @@
 Módulo para procesar cuestionarios de feedback y actualizar tracking automáticamente
 """
 
-import streamlit as st
+
 import pandas as pd
-import numpy as np
-from datetime import datetime
-from ui.tabs.shared import t, ExcelSharePointManager, ProjectViabilityCalculator
-import io
+import streamlit as st
+
+from ui.tabs.shared import ExcelSharePointManager, ProjectViabilityCalculator, t
 
 
 class FeedbackProcessor:

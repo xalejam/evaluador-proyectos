@@ -1,5 +1,6 @@
-import sqlite3
 import os
+import sqlite3
+
 import pytest
 
 DB_MAIN = os.path.abspath("project_viability.db")

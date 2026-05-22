@@ -1,8 +1,8 @@
+import os
 import sqlite3
 import tempfile
-import os
 
-from infra.db.migrations import ensure_projects_schema, ensure_evaluations_schema
+from infra.db.migrations import ensure_evaluations_schema, ensure_projects_schema
 
 
 def test_consolidated_schema_has_matrix_columns():

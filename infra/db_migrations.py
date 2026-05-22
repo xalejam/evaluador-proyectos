@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
-
-from infra.db.adapter import get_connection, IS_CLOUD, PLACEHOLDER
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER, get_connection
 
 DB_PATH = "project_viability.db"
 

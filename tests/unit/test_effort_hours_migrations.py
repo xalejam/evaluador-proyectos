@@ -1,6 +1,8 @@
 import sqlite3
+
 import pytest
-from infra.db_migrations import ensure_projects_schema, ensure_notes_schema, update_project_status
+
+from infra.db_migrations import ensure_notes_schema, ensure_projects_schema, update_project_status
 
 
 @pytest.fixture

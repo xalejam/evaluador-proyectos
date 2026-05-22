@@ -1,5 +1,4 @@
-import pytest
-from ui.i18n import t, set_language, get_language, TRANSLATIONS
+from ui.i18n import TRANSLATIONS, get_language, set_language, t
 
 
 def test_default_language_is_spanish():

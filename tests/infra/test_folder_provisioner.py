@@ -1,16 +1,13 @@
 # tests/infra/test_folder_provisioner.py
-import json
 import sys
 from pathlib import Path
-import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from infra.folder_provisioner import (
     FolderColor,
-    detect_color,
     LocalFolderProvisioner,
-    FolderProvisionResult,
+    detect_color,
 )
 
 CONFIG = {

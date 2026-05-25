@@ -51,37 +51,112 @@ def main():
         out.write("-- Migración SQLite → Supabase\n")
         out.write("-- Ejecutar en: Supabase > SQL Editor > New query\n\n")
 
-        export_table(conn, "projects", [
-            "id", "project_id", "name", "description", "created_date", "status",
-            "last_tracking_update", "country", "owner",
-            "current_time_per_task", "tasks_per_month", "staff_count",
-            "avg_salary_per_hour", "time_reduction_percent",
-            "development_hours", "development_cost_per_hour", "maintenance_monthly",
-            "implementation_complexity", "risk_level", "viability_score", "priority",
-            "monthly_savings", "annual_savings", "payback_period_months", "roi_first_year",
-            "recommendation", "initial_development_cost", "hours_saved_per_month",
-            "actual_monthly_savings", "actual_annual_savings",
-            "loop_url", "repo_url", "artifacts_url", "artifacts_type",
-            "tech_stack", "delivery_team", "updated_at", "closed_at"
-        ], "ON CONFLICT (id) DO NOTHING", out)
+        export_table(
+            conn,
+            "projects",
+            [
+                "id",
+                "project_id",
+                "name",
+                "description",
+                "created_date",
+                "status",
+                "last_tracking_update",
+                "country",
+                "owner",
+                "current_time_per_task",
+                "tasks_per_month",
+                "staff_count",
+                "avg_salary_per_hour",
+                "time_reduction_percent",
+                "development_hours",
+                "development_cost_per_hour",
+                "maintenance_monthly",
+                "implementation_complexity",
+                "risk_level",
+                "viability_score",
+                "priority",
+                "monthly_savings",
+                "annual_savings",
+                "payback_period_months",
+                "roi_first_year",
+                "recommendation",
+                "initial_development_cost",
+                "hours_saved_per_month",
+                "actual_monthly_savings",
+                "actual_annual_savings",
+                "loop_url",
+                "repo_url",
+                "artifacts_url",
+                "artifacts_type",
+                "tech_stack",
+                "delivery_team",
+                "updated_at",
+                "closed_at",
+            ],
+            "ON CONFLICT (id) DO NOTHING",
+            out,
+        )
 
-        export_table(conn, "project_notes", [
-            "note_id", "project_id", "note_text", "note_type", "author", "tags",
-            "is_private", "created_at", "entry_group_id", "note_title",
-            "progress_percent", "estimated_end_date", "effort_hours"
-        ], "ON CONFLICT (note_id) DO NOTHING", out)
+        export_table(
+            conn,
+            "project_notes",
+            [
+                "note_id",
+                "project_id",
+                "note_text",
+                "note_type",
+                "author",
+                "tags",
+                "is_private",
+                "created_at",
+                "entry_group_id",
+                "note_title",
+                "progress_percent",
+                "estimated_end_date",
+                "effort_hours",
+            ],
+            "ON CONFLICT (note_id) DO NOTHING",
+            out,
+        )
 
-        export_table(conn, "project_evaluations", [
-            "evaluation_id", "project_id", "created_at", "created_by", "action",
-            "status_after", "score_total", "score_impact", "score_risk", "score_complexity",
-            "monthly_savings", "annual_savings", "payback_period_months", "roi_first_year",
-            "hours_saved_per_month", "inputs_json", "answers_json", "weights_json",
-            "impact_score", "effort_score", "is_current"
-        ], "ON CONFLICT (evaluation_id) DO NOTHING", out)
+        export_table(
+            conn,
+            "project_evaluations",
+            [
+                "evaluation_id",
+                "project_id",
+                "created_at",
+                "created_by",
+                "action",
+                "status_after",
+                "score_total",
+                "score_impact",
+                "score_risk",
+                "score_complexity",
+                "monthly_savings",
+                "annual_savings",
+                "payback_period_months",
+                "roi_first_year",
+                "hours_saved_per_month",
+                "inputs_json",
+                "answers_json",
+                "weights_json",
+                "impact_score",
+                "effort_score",
+                "is_current",
+            ],
+            "ON CONFLICT (evaluation_id) DO NOTHING",
+            out,
+        )
 
-        export_table(conn, "project_members", [
-            "project_id", "member_name", "added_at"
-        ], "ON CONFLICT (project_id, member_name) DO NOTHING", out)
+        export_table(
+            conn,
+            "project_members",
+            ["project_id", "member_name", "added_at"],
+            "ON CONFLICT (project_id, member_name) DO NOTHING",
+            out,
+        )
 
     conn.close()
     print(f"\n✅ Archivo generado: {OUTPUT}")

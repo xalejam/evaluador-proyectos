@@ -44,7 +44,8 @@ def migrate_projects(sqlite_conn, pg_cur):
     rows = sqlite_conn.execute("SELECT * FROM projects").fetchall()
     print(f"  Migrando {len(rows)} proyectos...")
     for r in rows:
-        pg_cur.execute("""
+        pg_cur.execute(
+            """
             INSERT INTO projects (
                 id, project_id, name, description, created_date, status,
                 last_tracking_update, country, owner,
@@ -71,7 +72,9 @@ def migrate_projects(sqlite_conn, pg_cur):
                 %(tech_stack)s, %(delivery_team)s, %(updated_at)s, %(closed_at)s
             )
             ON CONFLICT (id) DO NOTHING
-        """, dict(r))
+        """,
+            dict(r),
+        )
     print(f"  OK: {len(rows)} proyectos.")
 
 
@@ -79,7 +82,8 @@ def migrate_notes(sqlite_conn, pg_cur):
     rows = sqlite_conn.execute("SELECT * FROM project_notes").fetchall()
     print(f"  Migrando {len(rows)} notas...")
     for r in rows:
-        pg_cur.execute("""
+        pg_cur.execute(
+            """
             INSERT INTO project_notes (
                 note_id, project_id, note_text, note_type, author, tags,
                 is_private, created_at, entry_group_id, note_title,
@@ -90,7 +94,9 @@ def migrate_notes(sqlite_conn, pg_cur):
                 %(progress_percent)s, %(estimated_end_date)s, %(effort_hours)s
             )
             ON CONFLICT (note_id) DO NOTHING
-        """, dict(r))
+        """,
+            dict(r),
+        )
     print(f"  OK: {len(rows)} notas.")
 
 
@@ -98,7 +104,8 @@ def migrate_evaluations(sqlite_conn, pg_cur):
     rows = sqlite_conn.execute("SELECT * FROM project_evaluations").fetchall()
     print(f"  Migrando {len(rows)} evaluaciones...")
     for r in rows:
-        pg_cur.execute("""
+        pg_cur.execute(
+            """
             INSERT INTO project_evaluations (
                 evaluation_id, project_id, created_at, created_by, action,
                 status_after, score_total, score_impact, score_risk, score_complexity,
@@ -113,7 +120,9 @@ def migrate_evaluations(sqlite_conn, pg_cur):
                 %(impact_score)s, %(effort_score)s, %(is_current)s
             )
             ON CONFLICT (evaluation_id) DO NOTHING
-        """, dict(r))
+        """,
+            dict(r),
+        )
     print(f"  OK: {len(rows)} evaluaciones.")
 
 
@@ -121,11 +130,14 @@ def migrate_members(sqlite_conn, pg_cur):
     rows = sqlite_conn.execute("SELECT * FROM project_members").fetchall()
     print(f"  Migrando {len(rows)} miembros...")
     for r in rows:
-        pg_cur.execute("""
+        pg_cur.execute(
+            """
             INSERT INTO project_members (project_id, member_name, added_at)
             VALUES (%(project_id)s, %(member_name)s, %(added_at)s)
             ON CONFLICT (project_id, member_name) DO NOTHING
-        """, dict(r))
+        """,
+            dict(r),
+        )
     print(f"  OK: {len(rows)} miembros.")
 
 

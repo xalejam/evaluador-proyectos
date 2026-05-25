@@ -165,6 +165,8 @@ def _render_scatter(df: pd.DataFrame, threshold_impact: float, threshold_effort:
         return
 
     plot_df = df.copy()
+    plot_df["impact_score"] = pd.to_numeric(plot_df["impact_score"], errors="coerce")
+    plot_df["effort_score"] = pd.to_numeric(plot_df["effort_score"], errors="coerce")
     plot_df = plot_df.dropna(subset=["impact_score", "effort_score"])
     if plot_df.empty:
         st.info(t("ucm_no_scores_filtered"))

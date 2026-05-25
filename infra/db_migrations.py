@@ -371,42 +371,71 @@ def update_project_status(conn, project_id: str, status: str) -> None:
 
 
 def ensure_members_schema(conn) -> None:
-    """Crea tabla project_members si no existe."""
-    from infra.db.adapter import IS_CLOUD
+    """Crea tabla project_members si no existe (SQLite local y PostgreSQL cloud)."""
+    from infra.db.adapter import IS_CLOUD, db_table_exists
+
+    if db_table_exists(conn, "project_members"):
+        return  # ya existe
 
     if IS_CLOUD:
-        return
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS project_members (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            project_id TEXT NOT NULL,
-            member_name TEXT NOT NULL,
-            added_at TEXT NOT NULL DEFAULT (datetime('now')),
-            UNIQUE(project_id, member_name)
-        )
+        # PostgreSQL: SERIAL en vez de AUTOINCREMENT, NOW() en vez de datetime('now')
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_members (
+                id SERIAL PRIMARY KEY,
+                project_id TEXT NOT NULL,
+                member_name TEXT NOT NULL,
+                added_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE(project_id, member_name)
+            )
         """)
-    _ensure_index(
-        conn,
-        "CREATE INDEX IF NOT EXISTS idx_project_members_pid ON project_members(project_id)",
-    )
+    else:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS project_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                member_name TEXT NOT NULL,
+                added_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(project_id, member_name)
+            )
+        """)
+        _ensure_index(
+            conn,
+            "CREATE INDEX IF NOT EXISTS idx_project_members_pid ON project_members(project_id)",
+        )
     conn.commit()
 
 
 def get_project_members(conn, project_id: str) -> list[str]:
     """Retorna lista de nombres de miembros para un proyecto."""
+    from infra.db.adapter import IS_CLOUD, db_table_exists
+
+    if not db_table_exists(conn, "project_members"):
+        return []
     rows = conn.execute(
         f"SELECT member_name FROM project_members WHERE project_id = {PLACEHOLDER} ORDER BY added_at",
         (project_id,),
     ).fetchall()
-    return [r[0] for r in rows]
+    # RealDictCursor (PostgreSQL) devuelve dicts; sqlite3.Row también soporta acceso por clave.
+    return [r["member_name"] if isinstance(r, dict) else r[0] for r in rows]
 
 
 def add_project_member(conn, project_id: str, member_name: str) -> None:
     """Agrega un miembro a un proyecto. Ignora duplicados silenciosamente."""
-    conn.execute(
-        f"INSERT OR IGNORE INTO project_members (project_id, member_name) VALUES ({PLACEHOLDER}, {PLACEHOLDER})",
-        (project_id.strip(), member_name.strip()),
-    )
+    from infra.db.adapter import IS_CLOUD
+
+    ensure_members_schema(conn)
+    if IS_CLOUD:
+        # PostgreSQL no tiene INSERT OR IGNORE; usar ON CONFLICT DO NOTHING
+        conn.execute(
+            f"INSERT INTO project_members (project_id, member_name) VALUES ({PLACEHOLDER}, {PLACEHOLDER})"
+            " ON CONFLICT (project_id, member_name) DO NOTHING",
+            (project_id.strip(), member_name.strip()),
+        )
+    else:
+        conn.execute(
+            f"INSERT OR IGNORE INTO project_members (project_id, member_name) VALUES ({PLACEHOLDER}, {PLACEHOLDER})",
+            (project_id.strip(), member_name.strip()),
+        )
     conn.commit()
 
 
@@ -421,8 +450,12 @@ def remove_project_member(conn, project_id: str, member_name: str) -> None:
 
 def get_all_known_members(conn) -> list[str]:
     """Retorna todos los nombres de miembros únicos en toda la BD (para sugerencias)."""
+    from infra.db.adapter import db_table_exists
+
+    if not db_table_exists(conn, "project_members"):
+        return []
     rows = conn.execute("SELECT DISTINCT member_name FROM project_members ORDER BY member_name").fetchall()
-    return [r[0] for r in rows]
+    return [r["member_name"] if isinstance(r, dict) else r[0] for r in rows]
 
 
 def ensure_all_operational_schema(conn) -> None:
@@ -430,7 +463,9 @@ def ensure_all_operational_schema(conn) -> None:
     from infra.db.adapter import IS_CLOUD
 
     if IS_CLOUD:
-        return  # Schema ya existe en Supabase, creado manualmente via SQL Editor
+        # En cloud solo creamos project_members si no existe (el resto ya está en Supabase)
+        ensure_members_schema(conn)
+        return
     ensure_projects_schema(conn)
     ensure_evaluations_schema(conn)
     ensure_notes_schema(conn)

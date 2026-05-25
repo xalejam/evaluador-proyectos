@@ -98,7 +98,7 @@ def _table_exists(conn, table_name: str) -> bool:
     if IS_CLOUD:
         return _db_table_exists(conn, table_name)
     row = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name = ? LIMIT 1",
+        f"SELECT name FROM sqlite_master WHERE type='table' AND name = {PLACEHOLDER} LIMIT 1",
         (table_name,),
     ).fetchone()
     return row is not None
@@ -393,7 +393,7 @@ def upsert_project_loop_url(conn: sqlite3.Connection, project_id: str, loop_url:
     if "loop_url" not in cols:
         conn.execute("ALTER TABLE projects ADD COLUMN loop_url TEXT")
     conn.execute(
-        "UPDATE projects SET loop_url = ? WHERE id = ? OR project_id = ?",
+        f"UPDATE projects SET loop_url = {PLACEHOLDER} WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
         (loop_url.strip(), project_id.strip(), project_id.strip()),
     )
     conn.commit()
@@ -421,13 +421,13 @@ def upsert_project_links(
     }
     for col, value in mapping.items():
         if col in cols and value is not None:
-            updates.append(f"{col} = ?")
+            updates.append(f"{col} = {PLACEHOLDER}")
             params.append(str(value).strip())
     if not updates:
         return
     params.extend([project_id.strip(), project_id.strip()])
     conn.execute(
-        f"UPDATE projects SET {', '.join(updates)} WHERE id = ? OR project_id = ?",
+        f"UPDATE projects SET {', '.join(updates)} WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
         params,
     )
     conn.commit()
@@ -488,12 +488,13 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
     if not cleaned:
         return []
 
+    placeholders_str = ", ".join([PLACEHOLDER] * 11)
     conn.executemany(
-        """
+        f"""
         INSERT INTO project_notes
             (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
              progress_percent, estimated_end_date, effort_hours)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES ({placeholders_str})
         """,
         cleaned,
     )
@@ -508,10 +509,10 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
 def get_latest_notes_by_type(conn: sqlite3.Connection, project_id: str) -> dict[str, dict[str, Any] | None]:
     """Obtiene la ultima nota por tipo para un proyecto."""
     rows = conn.execute(
-        """
+        f"""
         SELECT note_type, note_text, note_title, author, tags, created_at
         FROM v_project_latest_notes
-        WHERE project_id = ?
+        WHERE project_id = {PLACEHOLDER}
         """,
         (project_id,),
     ).fetchall()
@@ -543,26 +544,26 @@ def query_notes(
     params: list[Any] = []
 
     if project_id:
-        sql += " AND project_id = ?"
+        sql += f" AND project_id = {PLACEHOLDER}"
         params.append(project_id.strip())
     if text_query:
-        sql += " AND (note_text LIKE ? OR note_title LIKE ?)"
+        sql += f" AND (note_text LIKE {PLACEHOLDER} OR note_title LIKE {PLACEHOLDER})"
         pattern = f"%{text_query.strip()}%"
         params.extend([pattern, pattern])
     if tag_contains:
-        sql += " AND tags LIKE ?"
+        sql += f" AND tags LIKE {PLACEHOLDER}"
         params.append(f"%{tag_contains.strip()}%")
     if note_type and note_type in NOTE_TYPES:
-        sql += " AND note_type = ?"
+        sql += f" AND note_type = {PLACEHOLDER}"
         params.append(note_type)
     if date_from:
-        sql += " AND date(created_at) >= date(?)"
+        sql += f" AND date(created_at) >= date({PLACEHOLDER})"
         params.append(date_from.isoformat())
     if date_to:
-        sql += " AND date(created_at) <= date(?)"
+        sql += f" AND date(created_at) <= date({PLACEHOLDER})"
         params.append(date_to.isoformat())
 
-    sql += " ORDER BY datetime(created_at) DESC, note_id DESC LIMIT ?"
+    sql += f" ORDER BY datetime(created_at) DESC, note_id DESC LIMIT {PLACEHOLDER}"
     params.append(int(limit))
 
     return pd.read_sql_query(sql, conn, params=params)
@@ -583,7 +584,7 @@ def _merge_tags(selected_tags: list[str], csv_tags: str) -> str:
 
 def _get_recent_tags(conn: sqlite3.Connection, limit_rows: int = 300, max_tags: int = 40) -> list[str]:
     rows = conn.execute(
-        "SELECT tags FROM project_notes WHERE COALESCE(tags,'') <> '' ORDER BY datetime(created_at) DESC LIMIT ?",
+        f"SELECT tags FROM project_notes WHERE COALESCE(tags,'') <> '' ORDER BY datetime(created_at) DESC LIMIT {PLACEHOLDER}",
         (int(limit_rows),),
     ).fetchall()
     tags: list[str] = []
@@ -598,10 +599,10 @@ def _get_recent_tags(conn: sqlite3.Connection, limit_rows: int = 300, max_tags: 
 
 def _latest_project_note(conn: sqlite3.Connection, project_id: str) -> dict[str, Any] | None:
     row = conn.execute(
-        """
+        f"""
         SELECT note_id, note_type, note_title, note_text, author, tags, created_at, progress_percent, estimated_end_date
         FROM v_project_last_note
-        WHERE project_id = ?
+        WHERE project_id = {PLACEHOLDER}
         LIMIT 1
         """,
         (project_id,),
@@ -612,7 +613,7 @@ def _latest_project_note(conn: sqlite3.Connection, project_id: str) -> dict[str,
 def _get_project_hours(conn: sqlite3.Connection, project_id: str) -> dict[str, float]:
     """Retorna dev_hours y post_hours para un proyecto."""
     row = conn.execute(
-        """
+        f"""
         SELECT
             COALESCE(SUM(CASE
                 WHEN pn.note_type != 'soporte_post_entrega'
@@ -625,7 +626,7 @@ def _get_project_hours(conn: sqlite3.Connection, project_id: str) -> dict[str, f
             END), 0) AS post_hours
         FROM projects p
         LEFT JOIN project_notes pn ON pn.project_id = p.project_id
-        WHERE p.project_id = ? OR p.id = ?
+        WHERE p.project_id = {PLACEHOLDER} OR p.id = {PLACEHOLDER}
         """,
         (project_id, project_id),
     ).fetchone()
@@ -748,14 +749,14 @@ def calculate_auto_progress(
 
 def get_project_progress_trend(conn: sqlite3.Connection, project_id: str, *, limit: int = 50) -> pd.DataFrame:
     return pd.read_sql_query(
-        """
+        f"""
         SELECT
             project_id, note_id, entry_group_id, author, note_type, note_title,
             progress_percent, estimated_end_date, created_at
         FROM v_project_progress_history
-        WHERE project_id = ?
+        WHERE project_id = {PLACEHOLDER}
         ORDER BY datetime(created_at) DESC, note_id DESC
-        LIMIT ?
+        LIMIT {PLACEHOLDER}
         """,
         conn,
         params=[project_id, int(limit)],
@@ -825,7 +826,7 @@ def get_executive_summary_df(
     repo_expr = "repo_url" if "repo_url" in cols else "''"
     artifacts_expr = "artifacts_url" if "artifacts_url" in cols else "''"
 
-    placeholders = ",".join(["?"] * len(statuses))
+    placeholders = ",".join([PLACEHOLDER] * len(statuses))
     sql = f"""
         SELECT
             p.{id_col} AS project_id,

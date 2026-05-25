@@ -12,6 +12,16 @@ from infra.db.connection import get_sqlite_conn
 from ui.tabs.shared import t
 
 
+def _safe_number(value, default=0):
+    """Convierte un valor a número de forma segura."""
+    if value is None:
+        return default
+    try:
+        return float(value) if isinstance(value, str) else value or default
+    except (ValueError, TypeError):
+        return default
+
+
 def _load_projects_from_db() -> list[dict]:
     """Carga proyectos desde project_viability.db como lista de dicts."""
     with get_sqlite_conn(PV_DB_PATH) as conn:
@@ -47,9 +57,9 @@ def render_dashboard():
     total_projects = len(projects)
     dict_projects = [p for p in projects if isinstance(p, dict)]
     avg_viability = (
-        sum((p.get("viability_score") or 0) for p in dict_projects) / len(dict_projects) if dict_projects else 0
+        sum(_safe_number(p.get("viability_score")) for p in dict_projects) / len(dict_projects) if dict_projects else 0
     )
-    total_savings = sum((p.get("annual_savings") or 0) for p in dict_projects)
+    total_savings = sum(_safe_number(p.get("annual_savings")) for p in dict_projects)
     high_priority = len([p for p in dict_projects if p.get("priority") == t("priority_high")])
 
     with col1:
@@ -68,7 +78,7 @@ def render_dashboard():
         # Gráfico de distribución de scores
         st.subheader(t("dashboard_scores_distribution"))
 
-        scores = [p.get("viability_score") or 0 for p in projects if isinstance(p, dict)]
+        scores = [_safe_number(p.get("viability_score")) for p in projects if isinstance(p, dict)]
         fig_hist = px.histogram(
             x=scores,
             nbins=10,
@@ -112,13 +122,14 @@ def render_dashboard():
         df_scatter = pd.DataFrame(
             [
                 {
-                    "Score": p.get("viability_score") or 0,
-                    "ROI (%)": p.get("roi_first_year") or 0,
+                    "Score": _safe_number(p.get("viability_score")),
+                    "ROI (%)": _safe_number(p.get("roi_first_year")),
                     "Proyecto": p.get("name") or "",
                     "Prioridad": p.get("priority") or "",
-                    "Ahorro Anual": p.get("annual_savings") or 0,
+                    "Ahorro Anual": _safe_number(p.get("annual_savings")),
                 }
                 for p in projects
+                if isinstance(p, dict)
             ]
         )
 
@@ -191,11 +202,11 @@ def render_dashboard():
                 "ID": p.get("id") or p.get("project_id") or "",
                 t("project_name_col"): p.get("name") or "",
                 t("priority"): p.get("priority") or "",
-                t("score_col"): f"{p.get('viability_score') or 0}/100",
-                "ROI %": f"{p.get('roi_first_year') or 0:.1f}%",
-                t("annual_savings_col"): f"${p.get('annual_savings') or 0:,.0f}",
-                "Complejidad": f"{p.get('implementation_complexity') or 0}/5",
-                "Riesgo": f"{p.get('risk_level') or 0}/5",
+                t("score_col"): f"{_safe_number(p.get('viability_score'))}/100",
+                "ROI %": f"{_safe_number(p.get('roi_first_year')):.1f}%",
+                t("annual_savings_col"): f"${_safe_number(p.get('annual_savings')):,.0f}",
+                "Complejidad": f"{_safe_number(p.get('implementation_complexity'))}/5",
+                "Riesgo": f"{_safe_number(p.get('risk_level'))}/5",
                 t("status_col"): t("status_implemented") if p.get("status") == "implemented" else t("status_planning"),
             }
         )
@@ -298,19 +309,23 @@ def render_dashboard():
     insights = []
 
     # Análisis de scores
-    high_score_projects = len([p for p in projects if isinstance(p, dict) and (p.get("viability_score") or 0) >= 80])
+    high_score_projects = len(
+        [p for p in projects if isinstance(p, dict) and _safe_number(p.get("viability_score")) >= 80]
+    )
     if high_score_projects > 0 and total_projects > 0 and high_score_projects / total_projects > 0.5:
         insights.append(t("dashboard_insight_portfolio_solid"))
 
     # Análisis de complejidad
     high_complexity = len(
-        [p for p in projects if isinstance(p, dict) and (p.get("implementation_complexity") or 0) >= 4]
+        [p for p in projects if isinstance(p, dict) and _safe_number(p.get("implementation_complexity")) >= 4]
     )
     if high_complexity > 0 and total_projects > 0 and high_complexity / total_projects > 0.3:
         insights.append(t("dashboard_insight_high_complexity"))
 
     # Análisis de ROI
-    high_roi_projects = len([p for p in projects if isinstance(p, dict) and (p.get("roi_first_year") or 0) >= 100])
+    high_roi_projects = len(
+        [p for p in projects if isinstance(p, dict) and _safe_number(p.get("roi_first_year")) >= 100]
+    )
     if high_roi_projects > 0:
         insights.append(f"💰 **Excelente ROI**: {high_roi_projects} proyecto(s) con ROI superior al 100%")
 

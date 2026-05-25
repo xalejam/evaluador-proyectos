@@ -7,6 +7,7 @@ from typing import Any
 
 import pandas as pd
 
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER, db_read_dataframe
 from infra.db.connection import get_sqlite_conn
 
 
@@ -43,19 +44,23 @@ class NotesRepository:
         if not cleaned:
             return []
 
+        placeholders_str = ", ".join([PLACEHOLDER] * 10)
         with get_sqlite_conn(self.db_path) as conn:
             conn.executemany(
-                """
+                f"""
                 INSERT INTO project_notes
                     (
                         project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
                         progress_percent, estimated_end_date
                     )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES ({placeholders_str})
                 """,
                 cleaned,
             )
-            row = conn.execute("SELECT last_insert_rowid() AS last_id").fetchone()
+            if IS_CLOUD:
+                row = conn.execute("SELECT MAX(note_id) AS last_id FROM project_notes").fetchone()
+            else:
+                row = conn.execute("SELECT last_insert_rowid() AS last_id").fetchone()
             conn.commit()
             last_id = int(row["last_id"]) if row else 0
             first_id = max(1, last_id - len(cleaned) + 1)
@@ -81,54 +86,90 @@ class NotesRepository:
         """
         params: list[Any] = []
         if project_id:
-            sql += " AND project_id = ?"
+            sql += f" AND project_id = {PLACEHOLDER}"
             params.append(project_id)
         if text_query:
             p = f"%{text_query.strip()}%"
-            sql += " AND (note_text LIKE ? OR note_title LIKE ?)"
+            sql += f" AND (note_text LIKE {PLACEHOLDER} OR note_title LIKE {PLACEHOLDER})"
             params.extend([p, p])
         if tag_contains:
-            sql += " AND tags LIKE ?"
+            sql += f" AND tags LIKE {PLACEHOLDER}"
             params.append(f"%{tag_contains.strip()}%")
         if note_type:
-            sql += " AND note_type = ?"
+            sql += f" AND note_type = {PLACEHOLDER}"
             params.append(note_type)
         if date_from:
-            sql += " AND date(created_at) >= date(?)"
+            sql += (
+                f" AND created_at::date >= {PLACEHOLDER}::date"
+                if IS_CLOUD
+                else f" AND date(created_at) >= date({PLACEHOLDER})"
+            )
             params.append(date_from.isoformat())
         if date_to:
-            sql += " AND date(created_at) <= date(?)"
+            sql += (
+                f" AND created_at::date <= {PLACEHOLDER}::date"
+                if IS_CLOUD
+                else f" AND date(created_at) <= date({PLACEHOLDER})"
+            )
             params.append(date_to.isoformat())
-        sql += " ORDER BY datetime(created_at) DESC, note_id DESC LIMIT ?"
+        sql += (
+            f" ORDER BY created_at DESC, note_id DESC LIMIT {PLACEHOLDER}"
+            if IS_CLOUD
+            else f" ORDER BY datetime(created_at) DESC, note_id DESC LIMIT {PLACEHOLDER}"
+        )
         params.append(int(limit))
         with get_sqlite_conn(self.db_path) as conn:
-            return pd.read_sql_query(sql, conn, params=params)
+            return db_read_dataframe(conn, sql, params=params)
 
     def get_latest_notes_by_type(self, project_id: str) -> dict[str, dict[str, Any]]:
         with get_sqlite_conn(self.db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM v_project_latest_notes WHERE project_id = ?",
-                (project_id,),
-            ).fetchall()
+            if IS_CLOUD:
+                sql = f"""
+                    SELECT DISTINCT ON (note_type) *
+                    FROM project_notes
+                    WHERE project_id = {PLACEHOLDER}
+                    ORDER BY note_type, created_at DESC, note_id DESC
+                """
+            else:
+                sql = f"SELECT * FROM v_project_latest_notes WHERE project_id = {PLACEHOLDER}"
+            rows = conn.execute(sql, (project_id,)).fetchall()
             return {r["note_type"]: dict(r) for r in rows}
 
     def get_last_note(self, project_id: str) -> dict[str, Any] | None:
         with get_sqlite_conn(self.db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM v_project_last_note WHERE project_id = ? LIMIT 1",
-                (project_id,),
-            ).fetchone()
+            if IS_CLOUD:
+                sql = f"""
+                    SELECT * FROM project_notes
+                    WHERE project_id = {PLACEHOLDER}
+                    ORDER BY created_at DESC, note_id DESC LIMIT 1
+                """
+            else:
+                sql = f"SELECT * FROM v_project_last_note WHERE project_id = {PLACEHOLDER} LIMIT 1"
+            row = conn.execute(sql, (project_id,)).fetchone()
             return dict(row) if row else None
 
     def get_project_progress_trend(self, project_id: str, *, limit: int = 50) -> pd.DataFrame:
-        sql = """
-            SELECT
-                project_id, note_id, entry_group_id, author, note_type, note_title,
-                progress_percent, estimated_end_date, created_at
-            FROM v_project_progress_history
-            WHERE project_id = ?
-            ORDER BY datetime(created_at) DESC, note_id DESC
-            LIMIT ?
-        """
+        if IS_CLOUD:
+            sql = f"""
+                SELECT DISTINCT ON (project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)))
+                    project_id, note_id, entry_group_id, author, note_type, note_title,
+                    progress_percent, estimated_end_date, created_at
+                FROM project_notes
+                WHERE project_id = {PLACEHOLDER}
+                  AND progress_percent IS NOT NULL
+                ORDER BY project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)),
+                         created_at DESC, note_id DESC
+                LIMIT {PLACEHOLDER}
+            """
+        else:
+            sql = f"""
+                SELECT
+                    project_id, note_id, entry_group_id, author, note_type, note_title,
+                    progress_percent, estimated_end_date, created_at
+                FROM v_project_progress_history
+                WHERE project_id = {PLACEHOLDER}
+                ORDER BY datetime(created_at) DESC, note_id DESC
+                LIMIT {PLACEHOLDER}
+            """
         with get_sqlite_conn(self.db_path) as conn:
-            return pd.read_sql_query(sql, conn, params=[project_id, int(limit)])
+            return db_read_dataframe(conn, sql, params=[project_id, int(limit)])

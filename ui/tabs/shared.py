@@ -1080,8 +1080,10 @@ class ExcelSharePointManager:
         return self.id_format.format(country=country, owner=owner, sequence=sequence)
 
     def _read_table(self, table_name: str) -> pd.DataFrame:
+        from infra.db.adapter import db_read_dataframe
+
         with self._get_connection() as conn:
-            return pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+            return db_read_dataframe(conn, f"SELECT * FROM {table_name}")
 
     def _replace_table_from_df(self, table_name: str, df: pd.DataFrame, expected_columns: list):
         normalized = df.copy()
@@ -1270,16 +1272,18 @@ class ExcelSharePointManager:
 
     def search_projects(self, search_term: str) -> list:
         """Busca proyectos por ID, nombre o descripción"""
+        from infra.db.adapter import PLACEHOLDER, db_read_dataframe
+
         if not search_term:
             return self.get_all_projects()
         pattern = f"%{search_term}%"
         with self._get_connection() as conn:
-            query = """
+            query = f"""
                 SELECT * FROM projects
-                WHERE id LIKE ? OR name LIKE ? OR description LIKE ?
+                WHERE id LIKE {PLACEHOLDER} OR name LIKE {PLACEHOLDER} OR description LIKE {PLACEHOLDER}
                 ORDER BY created_date DESC
             """
-            df = pd.read_sql_query(query, conn, params=(pattern, pattern, pattern))
+            df = db_read_dataframe(conn, query, params=(pattern, pattern, pattern))
             return df.to_dict("records")
 
     def add_tracking(self, tracking_data: dict) -> str:
@@ -1320,21 +1324,31 @@ class ExcelSharePointManager:
 
     def get_all_projects(self) -> list:
         """Obtiene todos los proyectos como lista de diccionarios"""
+        from infra.db.adapter import db_read_dataframe
+
         with self._get_connection() as conn:
-            df = pd.read_sql_query("SELECT * FROM projects ORDER BY created_date DESC", conn)
+            df = db_read_dataframe(conn, "SELECT * FROM projects ORDER BY created_date DESC")
             return df.to_dict("records")
 
     def get_project(self, project_id: str) -> dict:
         """Obtiene un proyecto específico"""
+        from infra.db.adapter import PLACEHOLDER, db_read_dataframe
+
         with self._get_connection() as conn:
-            df = pd.read_sql_query("SELECT * FROM projects WHERE id = ? LIMIT 1", conn, params=(project_id,))
+            df = db_read_dataframe(
+                conn, f"SELECT * FROM projects WHERE id = {PLACEHOLDER} LIMIT 1", params=(project_id,)
+            )
             return df.iloc[0].to_dict() if not df.empty else None
 
     def get_project_tracking(self, project_id: str) -> list:
         """Obtiene seguimientos de un proyecto"""
+        from infra.db.adapter import PLACEHOLDER, db_read_dataframe
+
         with self._get_connection() as conn:
-            df = pd.read_sql_query(
-                "SELECT * FROM tracking WHERE project_id = ? ORDER BY tracking_date ASC", conn, params=(project_id,)
+            df = db_read_dataframe(
+                conn,
+                f"SELECT * FROM tracking WHERE project_id = {PLACEHOLDER} ORDER BY tracking_date ASC",
+                params=(project_id,),
             )
             return df.to_dict("records")
 

@@ -17,7 +17,13 @@ def _load_projects_from_db() -> list[dict]:
     with get_sqlite_conn(PV_DB_PATH) as conn:
         try:
             rows = conn.execute("SELECT * FROM projects WHERE status IS NOT NULL ORDER BY updated_at DESC").fetchall()
-            return [dict(r) for r in rows]
+            projects = []
+            for r in rows:
+                if isinstance(r, dict):
+                    projects.append(r)
+                else:
+                    projects.append(dict(r))
+            return projects
         except Exception as e:
             import logging
 
@@ -39,9 +45,12 @@ def render_dashboard():
     col1, col2, col3, col4 = st.columns(4)
 
     total_projects = len(projects)
-    avg_viability = sum((p.get("viability_score") or 0) for p in projects) / total_projects
-    total_savings = sum((p.get("annual_savings") or 0) for p in projects)
-    high_priority = len([p for p in projects if p.get("priority") == t("priority_high")])
+    dict_projects = [p for p in projects if isinstance(p, dict)]
+    avg_viability = (
+        sum((p.get("viability_score") or 0) for p in dict_projects) / len(dict_projects) if dict_projects else 0
+    )
+    total_savings = sum((p.get("annual_savings") or 0) for p in dict_projects)
+    high_priority = len([p for p in dict_projects if p.get("priority") == t("priority_high")])
 
     with col1:
         st.metric(t("total_projects"), total_projects)
@@ -59,7 +68,7 @@ def render_dashboard():
         # Gráfico de distribución de scores
         st.subheader(t("dashboard_scores_distribution"))
 
-        scores = [p.get("viability_score") or 0 for p in projects]
+        scores = [p.get("viability_score") or 0 for p in projects if isinstance(p, dict)]
         fig_hist = px.histogram(
             x=scores,
             nbins=10,
@@ -74,7 +83,7 @@ def render_dashboard():
         # Gráfico de prioridades
         st.subheader(t("dashboard_priority_distribution"))
 
-        priorities = [p.get("priority") for p in projects if p.get("priority")]
+        priorities = [p.get("priority") for p in projects if isinstance(p, dict) and p.get("priority")]
         priority_counts = pd.Series(priorities).value_counts()
 
         # Colores para cada prioridad
@@ -134,7 +143,9 @@ def render_dashboard():
     with col_factors1:
         # Distribución de complejidad
         complexity_levels = [
-            p.get("implementation_complexity") for p in projects if p.get("implementation_complexity") is not None
+            p.get("implementation_complexity")
+            for p in projects
+            if isinstance(p, dict) and p.get("implementation_complexity") is not None
         ]
         if complexity_levels:
             complexity_counts = pd.Series(complexity_levels).value_counts().sort_index()
@@ -152,7 +163,7 @@ def render_dashboard():
 
     with col_factors2:
         # Distribución de riesgo
-        risk_levels = [p.get("risk_level") for p in projects if p.get("risk_level") is not None]
+        risk_levels = [p.get("risk_level") for p in projects if isinstance(p, dict) and p.get("risk_level") is not None]
         if risk_levels:
             risk_counts = pd.Series(risk_levels).value_counts().sort_index()
 
@@ -171,8 +182,11 @@ def render_dashboard():
     st.subheader(t("all_projects"))
 
     # Preparar datos para la tabla
-    df_display = pd.DataFrame(
-        [
+    df_data = []
+    for p in projects:
+        if not isinstance(p, dict):
+            continue
+        df_data.append(
             {
                 "ID": p.get("id") or p.get("project_id") or "",
                 t("project_name_col"): p.get("name") or "",
@@ -184,9 +198,8 @@ def render_dashboard():
                 "Riesgo": f"{p.get('risk_level') or 0}/5",
                 t("status_col"): t("status_implemented") if p.get("status") == "implemented" else t("status_planning"),
             }
-            for p in projects
-        ]
-    )
+        )
+    df_display = pd.DataFrame(df_data) if df_data else pd.DataFrame()
 
     # Configurar colores para la tabla basados en prioridad
     def highlight_priority(row):
@@ -285,17 +298,19 @@ def render_dashboard():
     insights = []
 
     # Análisis de scores
-    high_score_projects = len([p for p in projects if (p.get("viability_score") or 0) >= 80])
-    if high_score_projects / total_projects > 0.5:
+    high_score_projects = len([p for p in projects if isinstance(p, dict) and (p.get("viability_score") or 0) >= 80])
+    if high_score_projects > 0 and total_projects > 0 and high_score_projects / total_projects > 0.5:
         insights.append(t("dashboard_insight_portfolio_solid"))
 
     # Análisis de complejidad
-    high_complexity = len([p for p in projects if (p.get("implementation_complexity") or 0) >= 4])
-    if high_complexity / total_projects > 0.3:
+    high_complexity = len(
+        [p for p in projects if isinstance(p, dict) and (p.get("implementation_complexity") or 0) >= 4]
+    )
+    if high_complexity > 0 and total_projects > 0 and high_complexity / total_projects > 0.3:
         insights.append(t("dashboard_insight_high_complexity"))
 
     # Análisis de ROI
-    high_roi_projects = len([p for p in projects if (p.get("roi_first_year") or 0) >= 100])
+    high_roi_projects = len([p for p in projects if isinstance(p, dict) and (p.get("roi_first_year") or 0) >= 100])
     if high_roi_projects > 0:
         insights.append(f"💰 **Excelente ROI**: {high_roi_projects} proyecto(s) con ROI superior al 100%")
 

@@ -1030,7 +1030,9 @@ class ExcelSharePointManager:
         return self._read_table("tracking")
 
     def _get_connection(self):
-        return sqlite3.connect(self.db_path)
+        from infra.db.adapter import get_connection
+
+        return get_connection(local_path=self.db_path)
 
     def _load_id_config(self):
         """Carga configuracion de formato de ID desde config/scoring_config.json."""
@@ -1066,7 +1068,8 @@ class ExcelSharePointManager:
         with self._get_connection() as conn:
             rows = conn.execute("SELECT id FROM projects").fetchall()
 
-        for (project_id,) in rows:
+        for row in rows:
+            project_id = row["id"] if isinstance(row, dict) else row[0]
             if not project_id:
                 continue
             match = regex.match(str(project_id))
@@ -1097,7 +1100,11 @@ class ExcelSharePointManager:
             normalized.to_sql(table_name, conn, if_exists="append", index=False)
 
     def init_excel_structure(self):
-        """Inicializa la estructura base en SQLite"""
+        """Inicializa la estructura base en SQLite (no-op en cloud)."""
+        from infra.db.adapter import IS_CLOUD
+
+        if IS_CLOUD:
+            return  # Las tablas ya existen en Supabase
         with self._get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS projects (
@@ -1237,27 +1244,33 @@ class ExcelSharePointManager:
         project_data["owner"] = owner or "GEN"
         project_data["created_date"] = datetime.now().isoformat()
         project_data["status"] = "planning"
+        from infra.db.adapter import PLACEHOLDER
+
         record = {col: project_data.get(col) for col in self.project_columns}
         columns_str = ", ".join(record.keys())
-        placeholders = ", ".join(["?"] * len(record))
+        placeholders = ", ".join([PLACEHOLDER] * len(record))
 
         with self._get_connection() as conn:
             conn.execute(f"INSERT INTO projects ({columns_str}) VALUES ({placeholders})", tuple(record.values()))
+            conn.commit()
 
         return project_id
 
     def update_project(self, project_id: str, project_data: dict) -> bool:
         """Actualiza un proyecto existente"""
         try:
+            from infra.db.adapter import PLACEHOLDER
+
             valid_updates = {k: v for k, v in project_data.items() if k in self.project_columns and k != "id"}
             if not valid_updates:
                 return True
 
-            set_clause = ", ".join([f"{k} = ?" for k in valid_updates.keys()])
+            set_clause = ", ".join([f"{k} = {PLACEHOLDER}" for k in valid_updates.keys()])
             params = list(valid_updates.values()) + [project_id]
 
             with self._get_connection() as conn:
-                cur = conn.execute(f"UPDATE projects SET {set_clause} WHERE id = ?", params)
+                cur = conn.execute(f"UPDATE projects SET {set_clause} WHERE id = {PLACEHOLDER}", params)
+                conn.commit()
                 return cur.rowcount > 0
 
         except Exception as e:
@@ -1266,8 +1279,10 @@ class ExcelSharePointManager:
 
     def project_exists(self, project_id: str) -> bool:
         """Verifica si un proyecto existe"""
+        from infra.db.adapter import PLACEHOLDER
+
         with self._get_connection() as conn:
-            cur = conn.execute("SELECT 1 FROM projects WHERE id = ? LIMIT 1", (project_id,))
+            cur = conn.execute(f"SELECT 1 FROM projects WHERE id = {PLACEHOLDER} LIMIT 1", (project_id,))
             return cur.fetchone() is not None
 
     def search_projects(self, search_term: str) -> list:
@@ -1291,14 +1306,19 @@ class ExcelSharePointManager:
         tracking_id = str(uuid.uuid4())[:8]
         tracking_data["id"] = tracking_id
         tracking_data["tracking_date"] = datetime.now().isoformat()
+        from infra.db.adapter import PLACEHOLDER
+
         record = {col: tracking_data.get(col) for col in self.tracking_columns}
         columns_str = ", ".join(record.keys())
-        placeholders = ", ".join(["?"] * len(record))
+        placeholders = ", ".join([PLACEHOLDER] * len(record))
         project_id = tracking_data["project_id"]
 
         with self._get_connection() as conn:
             conn.execute(f"INSERT INTO tracking ({columns_str}) VALUES ({placeholders})", tuple(record.values()))
-            conn.execute("UPDATE projects SET status = ? WHERE id = ?", ("implemented", project_id))
+            conn.execute(
+                f"UPDATE projects SET status = {PLACEHOLDER} WHERE id = {PLACEHOLDER}", ("implemented", project_id)
+            )
+            conn.commit()
 
         return tracking_id
 
@@ -1311,11 +1331,14 @@ class ExcelSharePointManager:
                 updates["actual_monthly_savings"] = tracking_results["actual_monthly_savings"]
                 updates["actual_annual_savings"] = tracking_results.get("actual_annual_savings")
 
-            set_clause = ", ".join([f"{k} = ?" for k in updates.keys()])
+            from infra.db.adapter import PLACEHOLDER
+
+            set_clause = ", ".join([f"{k} = {PLACEHOLDER}" for k in updates.keys()])
             params = list(updates.values()) + [project_id]
 
             with self._get_connection() as conn:
-                cur = conn.execute(f"UPDATE projects SET {set_clause} WHERE id = ?", params)
+                cur = conn.execute(f"UPDATE projects SET {set_clause} WHERE id = {PLACEHOLDER}", params)
+                conn.commit()
                 return cur.rowcount > 0
 
         except Exception as e:

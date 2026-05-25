@@ -348,7 +348,20 @@ def fetch_projects(conn: sqlite3.Connection, eligible_statuses: tuple[str, ...])
     artifacts_type_expr = "artifacts_type" if "artifacts_type" in cols else "''"
     tech_stack_expr = "tech_stack" if "tech_stack" in cols else "''"
 
+    from infra.db.adapter import IS_CLOUD
+
     placeholders = ",".join([PLACEHOLDER] * len(eligible_statuses))
+    # En PostgreSQL los campos timestamp no admiten COALESCE con ''; usar CAST explícito.
+    if IS_CLOUD:
+        created_expr_sel = f"COALESCE(CAST({created_col} AS TEXT), '') AS created_at"
+        updated_expr_sel = f"COALESCE(CAST({updated_col} AS TEXT), '') AS updated_at"
+        order_by = (
+            f"ORDER BY COALESCE(CAST({updated_col} AS TEXT), '') DESC, COALESCE(CAST({created_col} AS TEXT), '') DESC"
+        )
+    else:
+        created_expr_sel = f"COALESCE({created_col}, '') AS created_at"
+        updated_expr_sel = f"COALESCE({updated_col}, '') AS updated_at"
+        order_by = f"ORDER BY COALESCE({updated_col}, '') DESC, COALESCE({created_col}, '') DESC"
     query = f"""
         SELECT
             {id_col} AS project_id,
@@ -356,8 +369,8 @@ def fetch_projects(conn: sqlite3.Connection, eligible_statuses: tuple[str, ...])
             COALESCE({status_expr}, '') AS status,
             COALESCE({owner_expr}, '') AS owner,
             COALESCE({country_expr}, '') AS country,
-            COALESCE({created_col}, '') AS created_at,
-            COALESCE({updated_col}, '') AS updated_at,
+            {created_expr_sel},
+            {updated_expr_sel},
             COALESCE({loop_expr}, '') AS loop_url,
             COALESCE({repo_expr}, '') AS repo_url,
             COALESCE({artifacts_expr}, '') AS artifacts_url,
@@ -365,7 +378,7 @@ def fetch_projects(conn: sqlite3.Connection, eligible_statuses: tuple[str, ...])
             COALESCE({tech_stack_expr}, '') AS tech_stack
         FROM projects
         WHERE status IN ({placeholders})
-        ORDER BY COALESCE({updated_col}, '') DESC, COALESCE({created_col}, '') DESC
+        {order_by}
     """
     rows = conn.execute(query, tuple(eligible_statuses)).fetchall()
     return [
@@ -806,15 +819,24 @@ def get_project_progress_trend(conn: sqlite3.Connection, project_id: str, *, lim
     from infra.db.adapter import IS_CLOUD
 
     if IS_CLOUD:
+        # DISTINCT ON deduplica por entry_group_id (un registro por sesión de entrada).
+        # La subquery elige el más reciente por grupo; la query externa ordena
+        # cronológicamente (DESC) para que el código de análisis obtenga los más
+        # recientes primero (igual que la rama SQLite con v_project_progress_history).
         sql = f"""
-            SELECT DISTINCT ON (project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)))
-                project_id, note_id, entry_group_id, author, note_type, note_title,
-                progress_percent, estimated_end_date, created_at
-            FROM project_notes
-            WHERE project_id = {PLACEHOLDER}
-              AND progress_percent IS NOT NULL
-            ORDER BY project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)),
-                     created_at DESC, note_id DESC
+            SELECT project_id, note_id, entry_group_id, author, note_type, note_title,
+                   progress_percent, estimated_end_date, created_at
+            FROM (
+                SELECT DISTINCT ON (project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)))
+                    project_id, note_id, entry_group_id, author, note_type, note_title,
+                    progress_percent, estimated_end_date, created_at
+                FROM project_notes
+                WHERE project_id = {PLACEHOLDER}
+                  AND progress_percent IS NOT NULL
+                ORDER BY project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)),
+                         created_at DESC, note_id DESC
+            ) dedup
+            ORDER BY created_at DESC, note_id DESC
             LIMIT {PLACEHOLDER}
         """
     else:

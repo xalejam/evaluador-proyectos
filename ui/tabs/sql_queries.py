@@ -91,10 +91,17 @@ def render_sql_queries_tab():
         return
 
     try:
-        db_path = st.session_state.excel_manager.db_path
-        db_uri = Path(db_path).as_uri() + "?mode=ro"
-        with sqlite3.connect(db_uri, uri=True) as conn:
-            df = pd.read_sql_query(_normalize_query(query), conn)
+        from infra.db.adapter import IS_CLOUD, db_read_dataframe
+        from infra.db.connection import get_sqlite_conn
+
+        if IS_CLOUD:
+            with get_sqlite_conn() as conn:
+                df = db_read_dataframe(conn, _normalize_query(query))
+        else:
+            db_path = st.session_state.excel_manager.db_path
+            db_uri = Path(db_path).as_uri() + "?mode=ro"
+            with sqlite3.connect(db_uri, uri=True) as conn:
+                df = pd.read_sql_query(_normalize_query(query), conn)
     except Exception as e:
         st.error(f"{t('sql_error_running_query')}: {e}")
         return

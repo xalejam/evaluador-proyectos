@@ -229,8 +229,11 @@ def render_dashboard():
     styled_df = df_display.style.apply(highlight_priority, axis=1)
     st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
-    # Métricas de seguimiento — no disponibles en SQLite todavía
-    trackings = pd.DataFrame()
+    # Métricas de seguimiento desde base de datos
+    try:
+        trackings = st.session_state.excel_manager.tracking_df
+    except Exception:
+        trackings = pd.DataFrame()
 
     if len(trackings) > 0:
         st.subheader(t("dashboard_tracking_metrics"))
@@ -301,7 +304,7 @@ def render_dashboard():
 
                 st.caption(t("dashboard_scatter_caption"))
     else:
-        st.info("Tracking data will be available once migrated to database.")
+        st.info("No hay datos de seguimiento post-implementación aún.")
 
     # Insights y recomendaciones
     st.subheader(t("dashboard_portfolio_insights"))

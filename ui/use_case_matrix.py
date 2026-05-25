@@ -16,7 +16,7 @@ import streamlit as st
 
 from domain.matrix import classify_quadrant
 from infra.config_loader import ConfigLoader
-from infra.db.adapter import PLACEHOLDER, db_now, db_table_columns, db_table_exists
+from infra.db.adapter import PLACEHOLDER, db_now, db_read_dataframe, db_table_columns, db_table_exists
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.db.migrations import ensure_evaluations_schema, ensure_projects_schema
 from ui.i18n_labels import label_status
@@ -72,7 +72,7 @@ def _load_current_scores_df() -> pd.DataFrame:
               AND impact_score IS NOT NULL
               AND effort_score IS NOT NULL
         """
-        return pd.read_sql_query(sql, conn)
+        return db_read_dataframe(conn, sql)
 
 
 def _load_portfolio_df() -> pd.DataFrame:
@@ -96,7 +96,7 @@ def _load_portfolio_df() -> pd.DataFrame:
             FROM projects
             WHERE COALESCE({id_expr}, '') <> ''
         """
-        df = pd.read_sql_query(sql, conn)
+        df = db_read_dataframe(conn, sql)
 
     if df.empty:
         return df

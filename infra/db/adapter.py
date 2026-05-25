@@ -123,3 +123,33 @@ def db_now() -> str:
     from datetime import datetime
 
     return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def db_read_dataframe(conn, sql: str, params=None):
+    """Lee una query SQL como DataFrame compatible con SQLite y PostgreSQL.
+
+    pandas.read_sql_query con el adapter de psycopg2 puede mezclar headers
+    con datos. Esta función ejecuta y construye el DataFrame manualmente.
+    """
+    import pandas as pd
+
+    if params is None:
+        params = ()
+    cur = conn.execute(sql, tuple(params) if not isinstance(params, tuple) else params)
+    rows = cur.fetchall()
+    if not rows:
+        # Intentar inferir columnas desde el cursor description
+        try:
+            cols = [d[0] for d in cur.description] if cur.description else []
+        except Exception:
+            cols = []
+        return pd.DataFrame(columns=cols)
+    first = rows[0]
+    if isinstance(first, dict):
+        return pd.DataFrame([dict(r) for r in rows])
+    # sqlite3.Row soporta dict(r)
+    try:
+        return pd.DataFrame([dict(r) for r in rows])
+    except Exception:
+        cols = [d[0] for d in cur.description] if cur.description else []
+        return pd.DataFrame(rows, columns=cols)

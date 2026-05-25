@@ -17,7 +17,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from infra.db.adapter import PLACEHOLDER
+from infra.db.adapter import PLACEHOLDER, db_read_dataframe
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.presentation_ports import (
     InMemoryDestination,
@@ -488,6 +488,8 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
     if not cleaned:
         return []
 
+    from infra.db.adapter import IS_CLOUD
+
     placeholders_str = ", ".join([PLACEHOLDER] * 11)
     conn.executemany(
         f"""
@@ -498,7 +500,10 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
         """,
         cleaned,
     )
-    row = conn.execute("SELECT last_insert_rowid() AS last_id").fetchone()
+    if IS_CLOUD:
+        row = conn.execute("SELECT MAX(note_id) AS last_id FROM project_notes").fetchone()
+    else:
+        row = conn.execute("SELECT last_insert_rowid() AS last_id").fetchone()
     conn.commit()
 
     last_id = int(row["last_id"]) if row else 0
@@ -508,14 +513,23 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
 
 def get_latest_notes_by_type(conn: sqlite3.Connection, project_id: str) -> dict[str, dict[str, Any] | None]:
     """Obtiene la ultima nota por tipo para un proyecto."""
-    rows = conn.execute(
-        f"""
-        SELECT note_type, note_text, note_title, author, tags, created_at
-        FROM v_project_latest_notes
-        WHERE project_id = {PLACEHOLDER}
-        """,
-        (project_id,),
-    ).fetchall()
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        sql = f"""
+            SELECT DISTINCT ON (note_type)
+                note_type, note_text, note_title, author, tags, created_at
+            FROM project_notes
+            WHERE project_id = {PLACEHOLDER}
+            ORDER BY note_type, created_at DESC, note_id DESC
+        """
+    else:
+        sql = f"""
+            SELECT note_type, note_text, note_title, author, tags, created_at
+            FROM v_project_latest_notes
+            WHERE project_id = {PLACEHOLDER}
+        """
+    rows = conn.execute(sql, (project_id,)).fetchall()
     by_type = {t: None for t in NOTE_TYPES}
     for row in rows:
         by_type[row["note_type"]] = dict(row)
@@ -556,17 +570,33 @@ def query_notes(
     if note_type and note_type in NOTE_TYPES:
         sql += f" AND note_type = {PLACEHOLDER}"
         params.append(note_type)
+    from infra.db.adapter import IS_CLOUD
+
+    date_fn = "" if IS_CLOUD else "date"
+    order_fn = "" if IS_CLOUD else "datetime"
+
     if date_from:
-        sql += f" AND date(created_at) >= date({PLACEHOLDER})"
+        sql += (
+            f" AND {date_fn}(created_at) >= {date_fn}({PLACEHOLDER})"
+            if not IS_CLOUD
+            else f" AND created_at::date >= {PLACEHOLDER}::date"
+        )
         params.append(date_from.isoformat())
     if date_to:
-        sql += f" AND date(created_at) <= date({PLACEHOLDER})"
+        sql += (
+            f" AND {date_fn}(created_at) <= {date_fn}({PLACEHOLDER})"
+            if not IS_CLOUD
+            else f" AND created_at::date <= {PLACEHOLDER}::date"
+        )
         params.append(date_to.isoformat())
 
-    sql += f" ORDER BY datetime(created_at) DESC, note_id DESC LIMIT {PLACEHOLDER}"
+    if IS_CLOUD:
+        sql += f" ORDER BY created_at DESC, note_id DESC LIMIT {PLACEHOLDER}"
+    else:
+        sql += f" ORDER BY {order_fn}(created_at) DESC, note_id DESC LIMIT {PLACEHOLDER}"
     params.append(int(limit))
 
-    return pd.read_sql_query(sql, conn, params=params)
+    return db_read_dataframe(conn, sql, params=params)
 
 
 def _parse_tags(raw: str) -> list[str]:
@@ -583,10 +613,15 @@ def _merge_tags(selected_tags: list[str], csv_tags: str) -> str:
 
 
 def _get_recent_tags(conn: sqlite3.Connection, limit_rows: int = 300, max_tags: int = 40) -> list[str]:
-    rows = conn.execute(
-        f"SELECT tags FROM project_notes WHERE COALESCE(tags,'') <> '' ORDER BY datetime(created_at) DESC LIMIT {PLACEHOLDER}",
-        (int(limit_rows),),
-    ).fetchall()
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        sql = (
+            f"SELECT tags FROM project_notes WHERE COALESCE(tags,'') <> '' ORDER BY created_at DESC LIMIT {PLACEHOLDER}"
+        )
+    else:
+        sql = f"SELECT tags FROM project_notes WHERE COALESCE(tags,'') <> '' ORDER BY datetime(created_at) DESC LIMIT {PLACEHOLDER}"
+    rows = conn.execute(sql, (int(limit_rows),)).fetchall()
     tags: list[str] = []
     for row in rows:
         for tag in _parse_tags(str(row["tags"])):
@@ -598,26 +633,46 @@ def _get_recent_tags(conn: sqlite3.Connection, limit_rows: int = 300, max_tags: 
 
 
 def _latest_project_note(conn: sqlite3.Connection, project_id: str) -> dict[str, Any] | None:
-    row = conn.execute(
-        f"""
-        SELECT note_id, note_type, note_title, note_text, author, tags, created_at, progress_percent, estimated_end_date
-        FROM v_project_last_note
-        WHERE project_id = {PLACEHOLDER}
-        LIMIT 1
-        """,
-        (project_id,),
-    ).fetchone()
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        sql = f"""
+            SELECT note_id, note_type, note_title, note_text, author, tags, created_at, progress_percent, estimated_end_date
+            FROM project_notes
+            WHERE project_id = {PLACEHOLDER}
+            ORDER BY created_at DESC, note_id DESC
+            LIMIT 1
+        """
+    else:
+        sql = f"""
+            SELECT note_id, note_type, note_title, note_text, author, tags, created_at, progress_percent, estimated_end_date
+            FROM v_project_last_note
+            WHERE project_id = {PLACEHOLDER}
+            LIMIT 1
+        """
+    row = conn.execute(sql, (project_id,)).fetchone()
     return dict(row) if row else None
 
 
 def _get_project_hours(conn: sqlite3.Connection, project_id: str) -> dict[str, float]:
     """Retorna dev_hours y post_hours para un proyecto."""
-    row = conn.execute(
-        f"""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        date_cmp = "pn.created_at <= p.closed_at"
+    else:
+        date_cmp = "datetime(pn.created_at) <= datetime(p.closed_at)"
+
+    # Si "id" no existe (PostgreSQL solo tiene project_id), usar project_id dos veces no causa problema
+    id_filter = f"p.project_id = {PLACEHOLDER}"
+    if not IS_CLOUD:
+        id_filter = f"p.project_id = {PLACEHOLDER} OR p.id = {PLACEHOLDER}"
+
+    sql = f"""
         SELECT
             COALESCE(SUM(CASE
                 WHEN pn.note_type != 'soporte_post_entrega'
-                 AND (p.closed_at IS NULL OR datetime(pn.created_at) <= datetime(p.closed_at))
+                 AND (p.closed_at IS NULL OR {date_cmp})
                 THEN pn.effort_hours ELSE 0
             END), 0) AS dev_hours,
             COALESCE(SUM(CASE
@@ -626,10 +681,10 @@ def _get_project_hours(conn: sqlite3.Connection, project_id: str) -> dict[str, f
             END), 0) AS post_hours
         FROM projects p
         LEFT JOIN project_notes pn ON pn.project_id = p.project_id
-        WHERE p.project_id = {PLACEHOLDER} OR p.id = {PLACEHOLDER}
-        """,
-        (project_id, project_id),
-    ).fetchone()
+        WHERE {id_filter}
+    """
+    params = (project_id,) if IS_CLOUD else (project_id, project_id)
+    row = conn.execute(sql, params).fetchone()
     if row is None:
         return {"dev_hours": 0.0, "post_hours": 0.0}
     return {"dev_hours": float(row["dev_hours"]), "post_hours": float(row["post_hours"])}
@@ -748,19 +803,31 @@ def calculate_auto_progress(
 
 
 def get_project_progress_trend(conn: sqlite3.Connection, project_id: str, *, limit: int = 50) -> pd.DataFrame:
-    return pd.read_sql_query(
-        f"""
-        SELECT
-            project_id, note_id, entry_group_id, author, note_type, note_title,
-            progress_percent, estimated_end_date, created_at
-        FROM v_project_progress_history
-        WHERE project_id = {PLACEHOLDER}
-        ORDER BY datetime(created_at) DESC, note_id DESC
-        LIMIT {PLACEHOLDER}
-        """,
-        conn,
-        params=[project_id, int(limit)],
-    )
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        sql = f"""
+            SELECT DISTINCT ON (project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)))
+                project_id, note_id, entry_group_id, author, note_type, note_title,
+                progress_percent, estimated_end_date, created_at
+            FROM project_notes
+            WHERE project_id = {PLACEHOLDER}
+              AND progress_percent IS NOT NULL
+            ORDER BY project_id, COALESCE(NULLIF(entry_group_id, ''), CAST(note_id AS TEXT)),
+                     created_at DESC, note_id DESC
+            LIMIT {PLACEHOLDER}
+        """
+    else:
+        sql = f"""
+            SELECT
+                project_id, note_id, entry_group_id, author, note_type, note_title,
+                progress_percent, estimated_end_date, created_at
+            FROM v_project_progress_history
+            WHERE project_id = {PLACEHOLDER}
+            ORDER BY datetime(created_at) DESC, note_id DESC
+            LIMIT {PLACEHOLDER}
+        """
+    return db_read_dataframe(conn, sql, params=[project_id, int(limit)])
 
 
 def _progress_trend_symbol(last_three: list[int]) -> str:
@@ -826,49 +893,111 @@ def get_executive_summary_df(
     repo_expr = "repo_url" if "repo_url" in cols else "''"
     artifacts_expr = "artifacts_url" if "artifacts_url" in cols else "''"
 
+    from infra.db.adapter import IS_CLOUD
+
     placeholders = ",".join([PLACEHOLDER] * len(statuses))
-    sql = f"""
-        SELECT
-            p.{id_col} AS project_id,
-            COALESCE(p.name, '') AS project_name,
-            COALESCE(p.{status_expr}, '') AS status,
-            COALESCE(p.{loop_expr}, '') AS loop_url,
-            COALESCE(p.{repo_expr}, '') AS repo_url,
-            COALESCE(p.{artifacts_expr}, '') AS artifacts_url,
-            COALESCE(gg.note_text, ln.note_text, '') AS last_note,
-            ln.created_at AS last_note_at,
-            pp.note_text AS last_proximo_paso,
-            bb.note_text AS last_bloqueador,
-            rr.note_text AS last_riesgo,
-            ph.progress_percent AS current_progress_percent,
-            ph.created_at AS last_progress_at
-        FROM projects p
-        LEFT JOIN v_project_last_note ln
-            ON ln.project_id = p.{id_col}
-        LEFT JOIN v_project_latest_notes gg
-            ON gg.project_id = p.{id_col} AND gg.note_type = 'general'
-        LEFT JOIN v_project_latest_notes pp
-            ON pp.project_id = p.{id_col} AND pp.note_type = 'proximo_paso'
-        LEFT JOIN v_project_latest_notes bb
-            ON bb.project_id = p.{id_col} AND bb.note_type = 'bloqueador'
-        LEFT JOIN v_project_latest_notes rr
-            ON rr.project_id = p.{id_col} AND rr.note_type = 'riesgo'
-        LEFT JOIN (
-            SELECT h.project_id, h.progress_percent, h.created_at
-            FROM v_project_progress_history h
-            JOIN (
-                SELECT project_id, MAX(datetime(created_at)) AS max_created_at
-                FROM v_project_progress_history
-                GROUP BY project_id
-            ) mx
-              ON mx.project_id = h.project_id
-             AND datetime(mx.max_created_at) = datetime(h.created_at)
-        ) ph
-            ON ph.project_id = p.{id_col}
-        WHERE p.{status_expr} IN ({placeholders})
-        ORDER BY COALESCE(ln.created_at, '') DESC, p.{id_col}
-    """
-    df = pd.read_sql_query(sql, conn, params=statuses)
+
+    if IS_CLOUD:
+        # PostgreSQL: usar DISTINCT ON para emular las vistas
+        sql = f"""
+            WITH last_note_per_project AS (
+                SELECT DISTINCT ON (project_id)
+                    project_id, note_text, created_at
+                FROM project_notes
+                ORDER BY project_id, created_at DESC, note_id DESC
+            ),
+            latest_general AS (
+                SELECT DISTINCT ON (project_id) project_id, note_text
+                FROM project_notes WHERE note_type = 'general'
+                ORDER BY project_id, created_at DESC, note_id DESC
+            ),
+            latest_next AS (
+                SELECT DISTINCT ON (project_id) project_id, note_text
+                FROM project_notes WHERE note_type = 'proximo_paso'
+                ORDER BY project_id, created_at DESC, note_id DESC
+            ),
+            latest_block AS (
+                SELECT DISTINCT ON (project_id) project_id, note_text
+                FROM project_notes WHERE note_type = 'bloqueador'
+                ORDER BY project_id, created_at DESC, note_id DESC
+            ),
+            latest_risk AS (
+                SELECT DISTINCT ON (project_id) project_id, note_text
+                FROM project_notes WHERE note_type = 'riesgo'
+                ORDER BY project_id, created_at DESC, note_id DESC
+            ),
+            latest_progress AS (
+                SELECT DISTINCT ON (project_id) project_id, progress_percent, created_at
+                FROM project_notes WHERE progress_percent IS NOT NULL
+                ORDER BY project_id, created_at DESC, note_id DESC
+            )
+            SELECT
+                p.{id_col} AS project_id,
+                COALESCE(p.name, '') AS project_name,
+                COALESCE(p.{status_expr}, '') AS status,
+                COALESCE(p.{loop_expr}, '') AS loop_url,
+                COALESCE(p.{repo_expr}, '') AS repo_url,
+                COALESCE(p.{artifacts_expr}, '') AS artifacts_url,
+                COALESCE(gg.note_text, ln.note_text, '') AS last_note,
+                ln.created_at AS last_note_at,
+                pp.note_text AS last_proximo_paso,
+                bb.note_text AS last_bloqueador,
+                rr.note_text AS last_riesgo,
+                ph.progress_percent AS current_progress_percent,
+                ph.created_at AS last_progress_at
+            FROM projects p
+            LEFT JOIN last_note_per_project ln ON ln.project_id = p.{id_col}
+            LEFT JOIN latest_general gg ON gg.project_id = p.{id_col}
+            LEFT JOIN latest_next pp ON pp.project_id = p.{id_col}
+            LEFT JOIN latest_block bb ON bb.project_id = p.{id_col}
+            LEFT JOIN latest_risk rr ON rr.project_id = p.{id_col}
+            LEFT JOIN latest_progress ph ON ph.project_id = p.{id_col}
+            WHERE p.{status_expr} IN ({placeholders})
+            ORDER BY COALESCE(ln.created_at, NULL) DESC NULLS LAST, p.{id_col}
+        """
+    else:
+        sql = f"""
+            SELECT
+                p.{id_col} AS project_id,
+                COALESCE(p.name, '') AS project_name,
+                COALESCE(p.{status_expr}, '') AS status,
+                COALESCE(p.{loop_expr}, '') AS loop_url,
+                COALESCE(p.{repo_expr}, '') AS repo_url,
+                COALESCE(p.{artifacts_expr}, '') AS artifacts_url,
+                COALESCE(gg.note_text, ln.note_text, '') AS last_note,
+                ln.created_at AS last_note_at,
+                pp.note_text AS last_proximo_paso,
+                bb.note_text AS last_bloqueador,
+                rr.note_text AS last_riesgo,
+                ph.progress_percent AS current_progress_percent,
+                ph.created_at AS last_progress_at
+            FROM projects p
+            LEFT JOIN v_project_last_note ln
+                ON ln.project_id = p.{id_col}
+            LEFT JOIN v_project_latest_notes gg
+                ON gg.project_id = p.{id_col} AND gg.note_type = 'general'
+            LEFT JOIN v_project_latest_notes pp
+                ON pp.project_id = p.{id_col} AND pp.note_type = 'proximo_paso'
+            LEFT JOIN v_project_latest_notes bb
+                ON bb.project_id = p.{id_col} AND bb.note_type = 'bloqueador'
+            LEFT JOIN v_project_latest_notes rr
+                ON rr.project_id = p.{id_col} AND rr.note_type = 'riesgo'
+            LEFT JOIN (
+                SELECT h.project_id, h.progress_percent, h.created_at
+                FROM v_project_progress_history h
+                JOIN (
+                    SELECT project_id, MAX(datetime(created_at)) AS max_created_at
+                    FROM v_project_progress_history
+                    GROUP BY project_id
+                ) mx
+                  ON mx.project_id = h.project_id
+                 AND datetime(mx.max_created_at) = datetime(h.created_at)
+            ) ph
+                ON ph.project_id = p.{id_col}
+            WHERE p.{status_expr} IN ({placeholders})
+            ORDER BY COALESCE(ln.created_at, '') DESC, p.{id_col}
+        """
+    df = db_read_dataframe(conn, sql, params=statuses)
     if df.empty:
         return pd.DataFrame(
             columns=[

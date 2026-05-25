@@ -334,14 +334,22 @@ def render_use_case_matrix_tab() -> None:
         "updated_at",
     ]
     export_df = filtered[[c for c in export_cols if c in filtered.columns]].copy()
-    export_df["quadrant"] = export_df.apply(
-        lambda r: (
-            classify_quadrant(float(r["impact_score"]), float(r["effort_score"]), threshold_impact, threshold_effort)
-            if pd.notna(r.get("impact_score")) and pd.notna(r.get("effort_score"))
-            else "N/D"
-        ),
-        axis=1,
-    )
+    if "impact_score" in export_df.columns:
+        export_df["impact_score"] = pd.to_numeric(export_df["impact_score"], errors="coerce")
+    if "effort_score" in export_df.columns:
+        export_df["effort_score"] = pd.to_numeric(export_df["effort_score"], errors="coerce")
+
+    def _safe_quadrant(r):
+        impact = r.get("impact_score")
+        effort = r.get("effort_score")
+        if pd.isna(impact) or pd.isna(effort):
+            return "N/D"
+        try:
+            return classify_quadrant(float(impact), float(effort), threshold_impact, threshold_effort)
+        except (ValueError, TypeError):
+            return "N/D"
+
+    export_df["quadrant"] = export_df.apply(_safe_quadrant, axis=1)
     col_order = [
         c
         for c in [

@@ -21,6 +21,26 @@ from ui.i18n_labels import get_lang, help_statuses, label_status
 from ui.tabs.shared import get_scale_salary, t
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    """Convierte un valor a float de forma segura."""
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def _safe_int(value, default: int = 0) -> int:
+    """Convierte un valor a int de forma segura."""
+    if value is None or value == "":
+        return default
+    try:
+        return int(float(value))
+    except (ValueError, TypeError):
+        return default
+
+
 def calculate_average_hourly_rate():
     """Calcula la hora promedio de todos los proyectos en el Excel"""
     try:
@@ -105,9 +125,9 @@ def insert_project_evaluation_snapshot(
     inputs_dict: dict,
     author: str,
 ) -> None:
-    impact_score = _impact_points(float(inputs_dict.get("time_reduction_percent", 0) or 0))
-    risk_score = _risk_points(int(inputs_dict.get("risk_level", 3) or 3))
-    complexity_score = _complexity_points(int(inputs_dict.get("implementation_complexity", 3) or 3))
+    impact_score = _impact_points(_safe_float(inputs_dict.get("time_reduction_percent")))
+    risk_score = _risk_points(_safe_int(inputs_dict.get("risk_level"), 3))
+    complexity_score = _complexity_points(_safe_int(inputs_dict.get("implementation_complexity"), 3))
 
     conn.execute(
         f"""
@@ -123,15 +143,15 @@ def insert_project_evaluation_snapshot(
             (author or "").strip(),
             action,
             status_after,
-            float(calc_results.get("viability_score", 0) or 0),
+            _safe_float(calc_results.get("viability_score")),
             impact_score,
             risk_score,
             complexity_score,
-            float(calc_results.get("monthly_savings", 0) or 0),
-            float(calc_results.get("annual_savings", 0) or 0),
+            _safe_float(calc_results.get("monthly_savings")),
+            _safe_float(calc_results.get("annual_savings")),
             calc_results.get("payback_period_months"),
-            float(calc_results.get("roi_first_year", 0) or 0),
-            float(calc_results.get("hours_saved_per_month", 0) or 0),
+            _safe_float(calc_results.get("roi_first_year")),
+            _safe_float(calc_results.get("hours_saved_per_month")),
             json.dumps(inputs_dict, ensure_ascii=False),
         ),
     )
@@ -628,7 +648,7 @@ def render_planning_tab():
         else:
             st.success(t("persisted_results_success"))
 
-        viability_score = float(project_to_show.get("viability_score", 0) or 0)
+        viability_score = _safe_float(project_to_show.get("viability_score"))
         fig_gauge = go.Figure(
             go.Indicator(
                 mode="gauge+number",
@@ -653,10 +673,12 @@ def render_planning_tab():
         with m1:
             st.metric(t("priority"), str(project_to_show.get("priority", "N/D")))
             st.metric(t("viability_score"), f"{int(viability_score)}/100")
-            st.metric(t("time_reduction_achieved"), f"{float(project_to_show.get('time_reduction_percent', 0)):.0f}%")
+            st.metric(
+                t("time_reduction_achieved"), f"{_safe_float(project_to_show.get('time_reduction_percent')):.0f}%"
+            )
         with m2:
-            st.metric(t("monthly_savings"), f"${float(project_to_show.get('monthly_savings', 0)):,.0f}")
-            st.metric(t("annual_savings"), f"${float(project_to_show.get('annual_savings', 0)):,.0f}")
-            st.metric(t("first_year_roi"), f"{float(project_to_show.get('roi_first_year', 0)):.1f}%")
+            st.metric(t("monthly_savings"), f"${_safe_float(project_to_show.get('monthly_savings')):,.0f}")
+            st.metric(t("annual_savings"), f"${_safe_float(project_to_show.get('annual_savings')):,.0f}")
+            st.metric(t("first_year_roi"), f"{_safe_float(project_to_show.get('roi_first_year')):.1f}%")
 
         st.info(f"ðŸ“ {project_to_show.get('recommendation', '')}")

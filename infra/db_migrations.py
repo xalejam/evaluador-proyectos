@@ -353,19 +353,20 @@ def ensure_notes_schema(conn) -> None:
 
 
 def update_project_status(conn, project_id: str, status: str) -> None:
+    from infra.db.adapter import db_now
     conn.execute(
-        f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = datetime('now') WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
-        (status.strip(), project_id.strip(), project_id.strip()),
+        f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = {PLACEHOLDER} WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
+        (status.strip(), db_now(), project_id.strip(), project_id.strip()),
     )
     if status.strip() == "implemented":
         conn.execute(
             f"""
             UPDATE projects
-            SET closed_at = datetime('now')
+            SET closed_at = {PLACEHOLDER}
             WHERE (id = {PLACEHOLDER} OR project_id = {PLACEHOLDER})
-              AND (closed_at IS NULL OR closed_at = '')
+              AND closed_at IS NULL
             """,
-            (project_id.strip(), project_id.strip()),
+            (db_now(), project_id.strip(), project_id.strip()),
         )
     conn.commit()
 

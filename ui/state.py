@@ -29,4 +29,4 @@ def set_selected_project(project_id: str | None) -> None:
 
 
 def get_author_default() -> str:
-    return str(st.session_state.get("author", st.session_state.get("current_user", "Xiomy")))
+    return str(st.session_state.get("author", st.session_state.get("current_user", "Xiomara Monroy")))

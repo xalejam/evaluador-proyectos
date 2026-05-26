@@ -458,13 +458,38 @@ def get_all_known_members(conn) -> list[str]:
     return [r["member_name"] if isinstance(r, dict) else r[0] for r in rows]
 
 
+def fix_pg_sequences(conn) -> None:
+    """Sincroniza secuencias SERIAL de PostgreSQL con el MAX actual de cada tabla.
+
+    Solo corre en cloud (IS_CLOUD=True). Idempotente — no daña datos existentes.
+    Silencia errores por tabla para que una tabla faltante no bloquee las demás.
+    """
+    if not IS_CLOUD:
+        return
+    pairs = [
+        ("project_notes", "note_id"),
+        ("project_evaluations", "evaluation_id"),
+        ("project_members", "id"),
+    ]
+    for table, col in pairs:
+        try:
+            conn.execute(
+                "SELECT setval("
+                f"  pg_get_serial_sequence('{table}', '{col}'),"
+                f"  COALESCE((SELECT MAX({col}) FROM {table}), 1)"
+                ")"
+            )
+        except Exception:
+            pass  # tabla puede no existir en esta sesión
+    conn.commit()
+
+
 def ensure_all_operational_schema(conn) -> None:
     """Atajo para asegurar esquemas de projects/evaluations/notes."""
-    from infra.db.adapter import IS_CLOUD
-
     if IS_CLOUD:
         # En cloud solo creamos project_members si no existe (el resto ya está en Supabase)
         ensure_members_schema(conn)
+        fix_pg_sequences(conn)  # sincroniza secuencias SERIAL tras cualquier migración de datos
         return
     ensure_projects_schema(conn)
     ensure_evaluations_schema(conn)

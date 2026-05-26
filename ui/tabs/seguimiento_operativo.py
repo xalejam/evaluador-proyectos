@@ -1504,7 +1504,7 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                     general_text = str(general or "").lower()
                     if END_MARKER in general_text:
                         status_after = "implemented"
-                    elif is_first_entry and str(selected_project.status or "").lower() in START_EXECUTION_STATUSES:
+                    elif str(selected_project.status or "").lower() in START_EXECUTION_STATUSES:
                         status_after = "executing"
                     if status_after:
                         update_project_status(conn, selected_project.project_id, status_after)

@@ -9,6 +9,19 @@ from infra.db.adapter import PLACEHOLDER
 from infra.db.connection import DB_PATH, get_sqlite_conn
 
 
+def _derive_display_name(email: str) -> str:
+    """Deriva nombre para mostrar del email del usuario.
+
+    Ejemplos:
+        'carlos.montiel@wp.numerator.com' -> 'Carlos Montiel'
+        'xiomara.monroy@wp.numerator.com' -> 'Xiomara Monroy'
+        'admin@example.com'              -> 'Admin'
+    """
+    local = email.split("@")[0]
+    parts = local.replace("_", " ").replace(".", " ").split()
+    return " ".join(p.capitalize() for p in parts)
+
+
 def verify_password(plain: str, hashed: str) -> bool:
     if not plain:
         return False
@@ -44,6 +57,7 @@ def render_login() -> bool:
         if user and user["is_active"] and verify_password(password, user["password_hash"]):
             st.session_state["authenticated"] = True
             st.session_state["user_email"] = user["email"]
+            st.session_state["current_user"] = _derive_display_name(user["email"])
             st.rerun()
         else:
             st.error("Correo o contraseña incorrectos.")

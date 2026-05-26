@@ -11,6 +11,9 @@ import sqlite3
 import sys
 from pathlib import Path
 
+import psycopg2
+import psycopg2.extras
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
@@ -18,9 +21,6 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 if not DATABASE_URL:
     print("ERROR: Define DATABASE_URL antes de ejecutar.")
     sys.exit(1)
-
-import psycopg2
-import psycopg2.extras
 
 SQLITE_PATH = ROOT / "project_viability.db"
 if not SQLITE_PATH.exists():

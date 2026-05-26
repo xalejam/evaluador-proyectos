@@ -51,13 +51,9 @@ class EvaluationRepository:
                 ),
             )
             if IS_CLOUD:
-                row = conn.execute(
-                    "SELECT MAX(evaluation_id) AS last_id FROM project_evaluations"
-                ).fetchone()
+                row = conn.execute("SELECT MAX(evaluation_id) AS last_id FROM project_evaluations").fetchone()
             else:
-                row = conn.execute(
-                    "SELECT last_insert_rowid() AS last_id"
-                ).fetchone()
+                row = conn.execute("SELECT last_insert_rowid() AS last_id").fetchone()
             conn.commit()
             return int(row["last_id"] or 0) if row else 0
 

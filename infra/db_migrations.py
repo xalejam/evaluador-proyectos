@@ -14,7 +14,7 @@ def get_conn(db_path: str = DB_PATH):
 def _table_exists(conn, table_name: str) -> bool:
     if IS_CLOUD:
         row = conn.execute(
-            "SELECT table_name FROM information_schema.tables " "WHERE table_schema='public' AND table_name=%s LIMIT 1",
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name=%s LIMIT 1",
             (table_name,),
         ).fetchone()
     else:
@@ -30,7 +30,7 @@ def _table_columns(conn, table_name: str) -> set[str]:
         return set()
     if IS_CLOUD:
         rows = conn.execute(
-            "SELECT column_name FROM information_schema.columns " "WHERE table_schema='public' AND table_name=%s",
+            "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=%s",
             (table_name,),
         ).fetchall()
         return {r[0] for r in rows}
@@ -354,6 +354,7 @@ def ensure_notes_schema(conn) -> None:
 
 def update_project_status(conn, project_id: str, status: str) -> None:
     from infra.db.adapter import db_now
+
     conn.execute(
         f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = {PLACEHOLDER} WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
         (status.strip(), db_now(), project_id.strip(), project_id.strip()),
@@ -408,7 +409,7 @@ def ensure_members_schema(conn) -> None:
 
 def get_project_members(conn, project_id: str) -> list[str]:
     """Retorna lista de nombres de miembros para un proyecto."""
-    from infra.db.adapter import IS_CLOUD, db_table_exists
+    from infra.db.adapter import db_table_exists
 
     if not db_table_exists(conn, "project_members"):
         return []

@@ -894,6 +894,28 @@ def _progress_badge(value: Any) -> str:
     return f"🟩 {v}%"
 
 
+def _resolve_default_author(
+    candidate: str,
+    all_members: list[str],
+    fallback: str = "Xiomara Monroy",
+) -> str:
+    """Resuelve el nombre de autor para Captura rapida.
+
+    Busca `candidate` en `all_members` con comparacion case-insensitive.
+    Si hay match, devuelve el nombre exacto de la BD.
+    Si no hay match y candidate no esta vacio, devuelve candidate tal cual.
+    Si candidate esta vacio (o solo espacios), devuelve fallback.
+    """
+    stripped = candidate.strip()
+    if not stripped:
+        return fallback
+    lower = stripped.lower()
+    for member in all_members:
+        if member.lower() == lower:
+            return member
+    return stripped
+
+
 def get_executive_summary_df(
     conn: sqlite3.Connection,
     *,
@@ -1348,7 +1370,9 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
 
     _render_members_section(conn, selected_project.project_id)
 
-    default_author = str(st.session_state.get("author", st.session_state.get("current_user", "Xiomara Monroy")))
+    _candidate = str(st.session_state.get("current_user", st.session_state.get("author", "")))
+    _all_members = get_all_known_members(conn)
+    default_author = _resolve_default_author(_candidate, _all_members)
     note_help = _note_type_help()
     note_example = _note_type_example()
     capture_saved_key = f"ops_capture_saved_{selected_project.project_id}"

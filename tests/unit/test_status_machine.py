@@ -87,3 +87,18 @@ def test_approved_cannot_close_directly():
 def test_implemented_cannot_close_again():
     """Close button must NOT appear for already-implemented projects."""
     assert can_transition("implemented", "implemented") is False
+
+
+def test_implemented_can_reopen():
+    """Prerequisite for rendering the reopen button."""
+    assert can_transition("implemented", "executing") is True
+
+
+def test_executing_cannot_reopen():
+    """Reopen button must NOT appear for already-executing projects."""
+    assert can_transition("executing", "executing") is False
+
+
+def test_on_hold_can_resume():
+    """on_hold → executing is a valid transition."""
+    assert can_transition("on_hold", "executing") is True

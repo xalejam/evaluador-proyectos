@@ -1276,6 +1276,53 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
         else:
             st.write(t("no_link"))
 
+    # Limpia confirmación pendiente si el proyecto ya no puede reabrirse
+    _reopen_key = f"ops_confirm_reopen_{selected_project.project_id}"
+    if (
+        not can_transition(str(selected_project.status or ""), "executing")
+        or str(selected_project.status or "").lower() != "implemented"
+    ):
+        st.session_state.pop(_reopen_key, None)
+
+    # Botón de reapertura — visible solo para proyectos implementados
+    if (
+        can_transition(str(selected_project.status or ""), "executing")
+        and str(selected_project.status or "").lower() == "implemented"
+    ):
+        confirm_reopen_key = _reopen_key
+        st.info(
+            "Este proyecto está **Implementado**. "
+            "Si hay trabajo nuevo, puedes reabrirlo para seguir registrando avance."
+        )
+        if st.button(
+            "🔓 Reabrir proyecto",
+            key=f"ops_reopen_{selected_project.project_id}",
+            help="Vuelve el proyecto a En Ejecución.",
+        ):
+            st.session_state[confirm_reopen_key] = True
+
+        if st.session_state.get(confirm_reopen_key):
+            st.warning(
+                "⚠️ ¿Confirmas reapertura? "
+                "El status volverá a **En ejecución** y podrás registrar nuevas notas normalmente."
+            )
+            c1, c2 = st.columns(2)
+            if c1.button(
+                "Sí, reabrir",
+                key=f"ops_reopen_yes_{selected_project.project_id}",
+                type="primary",
+            ):
+                try:
+                    update_project_status(conn, selected_project.project_id, "executing")
+                    st.session_state.pop(confirm_reopen_key, None)
+                    st.success("✅ Proyecto reabierto. Ya puedes registrar nuevas notas.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Error al reabrir proyecto: {exc}")
+            if c2.button("Cancelar", key=f"ops_reopen_no_{selected_project.project_id}"):
+                st.session_state.pop(confirm_reopen_key, None)
+                st.rerun()
+
     if last_progress_value is not None and not pd.isna(last_progress_value):
         st.caption(
             f"{t('ops_progress_last_value')}: {int(last_progress_value)}% ({t('ops_progress_last_date')}: {last_progress_date})"

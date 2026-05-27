@@ -1,0 +1,25 @@
+# Force LF line endings for all text files.
+# Prevents ruff format CI failures caused by Windows CRLF checkouts (core.autocrlf=true).
+
+* text=auto eol=lf
+
+*.py   text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.cfg  text eol=lf
+*.ini  text eol=lf
+*.sh   text eol=lf
+
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pptx binary
+*.xlsx binary
+*.docx binary
+*.db   binary

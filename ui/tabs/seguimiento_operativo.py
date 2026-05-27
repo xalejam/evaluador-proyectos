@@ -1515,11 +1515,15 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                 except Exception as exc:
                     st.error(f"{t('ops_save_update_error')}: {exc}")
 
+    # Limpia confirmación pendiente si el proyecto ya no puede cerrarse
+    _close_key = f"ops_confirm_close_{selected_project.project_id}"
+    if not can_transition(str(selected_project.status or ""), "implemented"):
+        st.session_state.pop(_close_key, None)
+
     # Botón explícito para cerrar proyecto (executing → implemented)
     if can_transition(str(selected_project.status or ""), "implemented"):
-        st.markdown("---")
         st.markdown("**Cierre de proyecto**")
-        confirm_close_key = f"ops_confirm_close_{selected_project.project_id}"
+        confirm_close_key = _close_key
         if st.button(
             "🔒 Cerrar proyecto",
             key=f"ops_close_{selected_project.project_id}",

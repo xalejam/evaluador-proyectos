@@ -1,4 +1,4 @@
-from infra.status_machine import ALLOWED_TRANSITIONS, allowed_targets, can_transition
+from infra.status_machine import ALLOWED_TRANSITIONS, INITIAL_STATUSES, allowed_targets, can_transition
 
 
 def test_approved_to_executing_allowed():
@@ -53,3 +53,22 @@ def test_all_transition_targets_are_known_statuses():
     for src, targets in ALLOWED_TRANSITIONS.items():
         for tgt in targets:
             assert tgt in known, f"Transition {src!r} → {tgt!r}: target {tgt!r} is not a key in ALLOWED_TRANSITIONS"
+
+
+def test_case_insensitive_target():
+    assert can_transition("approved", "Executing") is True
+    assert can_transition("approved", "EXECUTING") is True
+
+
+def test_self_transition_not_allowed():
+    for status in ALLOWED_TRANSITIONS:
+        assert can_transition(status, status) is False, f"Self-transition should be blocked for {status!r}"
+
+
+def test_initial_statuses_have_no_inbound_transitions():
+    """Entry-point statuses must not appear as targets in any transition."""
+    all_targets = {tgt for targets in ALLOWED_TRANSITIONS.values() for tgt in targets}
+    for status in INITIAL_STATUSES:
+        assert status not in all_targets, (
+            f"Initial status {status!r} appears as a transition target — remove it from INITIAL_STATUSES"
+        )

@@ -18,10 +18,13 @@ ALLOWED_TRANSITIONS: dict[str, list[str]] = {
     "handed_off": [],  # terminal — no transitions out
 }
 
+# Statuses that have no inbound transitions — valid project entry points.
+INITIAL_STATUSES: frozenset[str] = frozenset({"evaluated", "backlog"})
+
 
 def can_transition(current: str, target: str) -> bool:
     """Return True if transitioning from current to target is allowed."""
-    return target in ALLOWED_TRANSITIONS.get(current.lower(), [])
+    return target.lower() in ALLOWED_TRANSITIONS.get(current.lower(), [])
 
 
 def allowed_targets(current: str) -> list[str]:

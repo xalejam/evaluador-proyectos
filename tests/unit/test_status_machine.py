@@ -72,3 +72,18 @@ def test_initial_statuses_have_no_inbound_transitions():
         assert status not in all_targets, (
             f"Initial status {status!r} appears as a transition target — remove it from INITIAL_STATUSES"
         )
+
+
+def test_executing_can_close():
+    """Prerequisite for rendering the close button."""
+    assert can_transition("executing", "implemented") is True
+
+
+def test_approved_cannot_close_directly():
+    """Close button must NOT appear for projects not yet executing."""
+    assert can_transition("approved", "implemented") is False
+
+
+def test_implemented_cannot_close_again():
+    """Close button must NOT appear for already-implemented projects."""
+    assert can_transition("implemented", "implemented") is False

@@ -1,4 +1,4 @@
-﻿"""Seguimiento Operativo v2 (notas inmutables por proyecto).
+"""Seguimiento Operativo v2 (notas inmutables por proyecto).
 
 Este modulo usa SQLite en `project_viability.db` y puede ejecutarse de forma
 independiente con:
@@ -26,6 +26,7 @@ from infra.presentation_ports import (
 from infra.presentation_ports import (
     build_presentation_bytes as _build_pptx_bytes,
 )
+from infra.status_machine import can_transition
 from ui.i18n_labels import label_note_type, label_status
 from ui.tabs.shared import t
 
@@ -47,7 +48,6 @@ NOTE_TYPES = ("general", "proximo_paso", "bloqueador", "riesgo")
 ARTIFACT_TYPES = ("azure_devops", "sharepoint", "powerbi", "excel_vba", "folder", "agent", "other")
 TECH_STACK_OPTIONS = ("python", "vba", "powerbi", "agent", "other")
 START_EXECUTION_STATUSES = ("evaluated", "approved", "in_agenda")
-END_MARKER = "/end"
 POST_CLOSURE_TYPE = "soporte_post_entrega"
 
 
@@ -1501,10 +1501,7 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                         upsert_project_loop_url(conn, selected_project.project_id, loop_url_input)
                     inserted_ids = insert_notes_batch(conn, notes_to_insert)
                     status_after: str | None = None
-                    general_text = str(general or "").lower()
-                    if END_MARKER in general_text:
-                        status_after = "implemented"
-                    elif str(selected_project.status or "").lower() in START_EXECUTION_STATUSES:
+                    if str(selected_project.status or "").lower() in START_EXECUTION_STATUSES:
                         status_after = "executing"
                     if status_after:
                         update_project_status(conn, selected_project.project_id, status_after)
@@ -1517,6 +1514,40 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                     st.rerun()
                 except Exception as exc:
                     st.error(f"{t('ops_save_update_error')}: {exc}")
+
+    # Botón explícito para cerrar proyecto (executing → implemented)
+    if can_transition(str(selected_project.status or ""), "implemented"):
+        st.markdown("---")
+        st.markdown("**Cierre de proyecto**")
+        confirm_close_key = f"ops_confirm_close_{selected_project.project_id}"
+        if st.button(
+            "🔒 Cerrar proyecto",
+            key=f"ops_close_{selected_project.project_id}",
+            help="Marca el proyecto como Implementado. Acción reversible.",
+        ):
+            st.session_state[confirm_close_key] = True
+
+        if st.session_state.get(confirm_close_key):
+            st.warning(
+                "⚠️ ¿Confirmas el cierre del proyecto? "
+                "El status cambiará a **Implementado**. Puedes reabrirlo después si es necesario."
+            )
+            c1, c2 = st.columns(2)
+            if c1.button(
+                "Sí, cerrar",
+                key=f"ops_close_yes_{selected_project.project_id}",
+                type="primary",
+            ):
+                try:
+                    update_project_status(conn, selected_project.project_id, "implemented")
+                    st.session_state.pop(confirm_close_key, None)
+                    st.success("✅ Proyecto cerrado correctamente.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Error al cerrar proyecto: {exc}")
+            if c2.button("Cancelar", key=f"ops_close_no_{selected_project.project_id}"):
+                st.session_state.pop(confirm_close_key, None)
+                st.rerun()
 
     st.markdown("---")
 

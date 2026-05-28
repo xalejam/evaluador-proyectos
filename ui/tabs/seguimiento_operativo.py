@@ -466,6 +466,9 @@ from infra.db_migrations import (  # noqa: E402
 
 def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) -> list[int]:
     """Inserta lote de notas inmutables. Retorna note_ids insertados."""
+    from infra.db.adapter import db_now
+
+    now = db_now()
     cleaned: list[tuple[Any, ...]] = []
     for note in notes:
         note_type = str(note.get("note_type", "")).strip()
@@ -495,6 +498,7 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
                 progress_percent,
                 str(note.get("estimated_end_date", "")).strip() or None,
                 note.get("effort_hours"),
+                now,
             )
         )
 
@@ -503,12 +507,12 @@ def insert_notes_batch(conn: sqlite3.Connection, notes: list[dict[str, Any]]) ->
 
     from infra.db.adapter import IS_CLOUD
 
-    placeholders_str = ", ".join([PLACEHOLDER] * 11)
+    placeholders_str = ", ".join([PLACEHOLDER] * 12)
     conn.executemany(
         f"""
         INSERT INTO project_notes
             (project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
-             progress_percent, estimated_end_date, effort_hours)
+             progress_percent, estimated_end_date, effort_hours, created_at)
         VALUES ({placeholders_str})
         """,
         cleaned,

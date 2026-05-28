@@ -16,6 +16,9 @@ class NotesRepository:
         self.db_path = db_path
 
     def insert_notes_batch(self, notes: list[dict[str, Any]]) -> list[int]:
+        from infra.db.adapter import db_now
+
+        now = db_now()
         cleaned = []
         for n in notes:
             if not str(n.get("project_id", "")).strip() or not str(n.get("note_text", "")).strip():
@@ -39,19 +42,20 @@ class NotesRepository:
                     str(n.get("note_title", "")).strip(),
                     progress_percent,
                     str(n.get("estimated_end_date", "")).strip() or None,
+                    now,
                 )
             )
         if not cleaned:
             return []
 
-        placeholders_str = ", ".join([PLACEHOLDER] * 10)
+        placeholders_str = ", ".join([PLACEHOLDER] * 11)
         with get_sqlite_conn(self.db_path) as conn:
             conn.executemany(
                 f"""
                 INSERT INTO project_notes
                     (
                         project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
-                        progress_percent, estimated_end_date
+                        progress_percent, estimated_end_date, created_at
                     )
                 VALUES ({placeholders_str})
                 """,

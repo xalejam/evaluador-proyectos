@@ -69,9 +69,9 @@ def test_initial_statuses_have_no_inbound_transitions():
     """Entry-point statuses must not appear as targets in any transition."""
     all_targets = {tgt for targets in ALLOWED_TRANSITIONS.values() for tgt in targets}
     for status in INITIAL_STATUSES:
-        assert status not in all_targets, (
-            f"Initial status {status!r} appears as a transition target — remove it from INITIAL_STATUSES"
-        )
+        assert (
+            status not in all_targets
+        ), f"Initial status {status!r} appears as a transition target — remove it from INITIAL_STATUSES"
 
 
 def test_executing_can_close():

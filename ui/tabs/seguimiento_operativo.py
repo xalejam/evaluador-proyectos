@@ -266,7 +266,7 @@ def _create_views(conn: sqlite3.Connection) -> None:
                     pn.*,
                     ROW_NUMBER() OVER (
                         PARTITION BY pn.project_id, COALESCE(NULLIF(pn.entry_group_id, ''), CAST(pn.note_id AS TEXT))
-                        ORDER BY pn.note_id ASC
+                        ORDER BY pn.note_id DESC
                     ) AS rn
                 FROM project_notes pn
                 WHERE pn.progress_percent IS NOT NULL

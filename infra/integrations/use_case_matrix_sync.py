@@ -10,6 +10,7 @@ import json
 
 from domain.scoring import calculate_scores
 from infra.config_loader import ConfigLoader
+from infra.db.adapter import PLACEHOLDER
 from infra.db.connection import get_sqlite_conn
 
 
@@ -62,17 +63,18 @@ def sync_to_use_case_matrix(
     answers = _derive_matrix_answers(project_payload, calc_results)
     impact_score, effort_score = calculate_scores(answers, weights)
 
+    p = PLACEHOLDER
     with get_sqlite_conn(db_path) as conn:
         conn.execute(
-            "UPDATE project_evaluations SET is_current = 0 WHERE project_id = ? AND is_current = 1",
+            f"UPDATE project_evaluations SET is_current = 0 WHERE project_id = {p} AND is_current = 1",
             (project_id,),
         )
         conn.execute(
-            """
+            f"""
             INSERT INTO project_evaluations
                 (project_id, action, status_after, score_total, inputs_json,
                  answers_json, weights_json, impact_score, effort_score, is_current)
-            VALUES (?, 'matrix_sync', NULL, NULL, NULL, ?, ?, ?, ?, 1)
+            VALUES ({p}, 'matrix_sync', NULL, NULL, NULL, {p}, {p}, {p}, {p}, 1)
             """,
             (
                 project_id,

@@ -14,7 +14,6 @@ if str(_SCRIPTS) not in sys.path:
 from generate_execution_status_presentation import (  # noqa: E402
     ProjectStatus,
     build_presentation_bytes,
-    fetch_executing_projects,
 )
 
 DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
@@ -107,9 +106,9 @@ class SqliteDataSource:
         self._db_path = Path(db_path).resolve()
 
     def fetch_projects(self) -> list[ProjectStatus]:
-        from infra.db.adapter import IS_CLOUD, db_read_dataframe, get_connection
-
         import pandas as pd
+
+        from infra.db.adapter import db_read_dataframe, get_connection
 
         conn = get_connection(local_path=str(self._db_path))
         df = db_read_dataframe(conn, _PPTX_SQL)

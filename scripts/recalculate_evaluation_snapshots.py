@@ -73,7 +73,16 @@ def _recalculate_projects_table(args) -> None:
     pending: list[tuple] = []  # (hours, monthly, annual, payback, roi, updated_at, id)
 
     for row in rows:
-        if any(row.get(k) is None for k in ("current_time_per_task", "tasks_per_month", "staff_count", "avg_salary_per_hour", "time_reduction_percent")):
+        if any(
+            row.get(k) is None
+            for k in (
+                "current_time_per_task",
+                "tasks_per_month",
+                "staff_count",
+                "avg_salary_per_hour",
+                "time_reduction_percent",
+            )
+        ):
             skipped += 1
             if args.verbose:
                 print(f"  OMITIDO project_id={row['project_id']} | parametros financieros incompletos")

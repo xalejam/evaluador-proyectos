@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from domain.scoring.financials import compute_financials  # noqa: E402
-from infra.db.adapter import IS_CLOUD, PLACEHOLDER, get_connection  # noqa: E402
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER, db_now, get_connection  # noqa: E402
 
 _FINANCIAL_KEYS = (
     "current_time_per_task",
@@ -52,6 +52,102 @@ def _engine_label() -> str:
     return "Supabase (PostgreSQL, IS_CLOUD=True)" if IS_CLOUD else "SQLite local (IS_CLOUD=False)"
 
 
+def _recalculate_projects_table(args) -> None:
+    """Recalcula projects.hours_saved_per_month y campos derivados.
+
+    A diferencia de project_evaluations, projects guarda los parametros
+    financieros como columnas nativas (no inputs_json), y se actualiza por
+    `id` (PK), no por project_id, siguiendo el patron de ui/tabs/planning.py.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, project_id, current_time_per_task, tasks_per_month, staff_count, "
+            "avg_salary_per_hour, time_reduction_percent, development_hours, "
+            "development_cost_per_hour, maintenance_monthly, hours_saved_per_month, "
+            "monthly_savings, annual_savings, payback_period_months, roi_first_year "
+            "FROM projects"
+        ).fetchall()
+        rows = [dict(r) for r in rows]
+
+    updated = unchanged = skipped = errors = 0
+    pending: list[tuple] = []  # (hours, monthly, annual, payback, roi, updated_at, id)
+
+    for row in rows:
+        if any(row.get(k) is None for k in ("current_time_per_task", "tasks_per_month", "staff_count", "avg_salary_per_hour", "time_reduction_percent")):
+            skipped += 1
+            if args.verbose:
+                print(f"  OMITIDO project_id={row['project_id']} | parametros financieros incompletos")
+            continue
+
+        try:
+            calc = compute_financials(
+                current_time_per_task=float(row["current_time_per_task"]),
+                tasks_per_month=int(row["tasks_per_month"]),
+                staff_count=int(row["staff_count"]),
+                avg_salary_per_hour=float(row["avg_salary_per_hour"]),
+                time_reduction_percent=float(row["time_reduction_percent"]),
+                development_hours=float(row["development_hours"] or 0),
+                development_cost_per_hour=float(row["development_cost_per_hour"] or 0),
+                maintenance_monthly=float(row["maintenance_monthly"] or 0),
+            )
+        except (ValueError, TypeError, KeyError) as exc:
+            errors += 1
+            print(f"  ERROR project_id={row['project_id']}: {exc}")
+            continue
+
+        new_hours = calc["hours_saved_per_month"]
+        old_hours = row.get("hours_saved_per_month")
+        if old_hours is not None and abs(float(old_hours) - new_hours) < 1e-6:
+            unchanged += 1
+            continue
+
+        updated += 1
+        pending.append(
+            (
+                calc["hours_saved_per_month"],
+                calc["monthly_savings"],
+                calc["annual_savings"],
+                calc["payback_period_months"],
+                calc["roi_first_year"],
+                db_now(),
+                row["id"],
+            )
+        )
+        if args.verbose:
+            print(
+                f"  project_id={row['project_id']}\n"
+                f"    hours_saved_per_month: {old_hours} -> {new_hours:.4f}\n"
+                f"    monthly_savings:       {row.get('monthly_savings')} -> {calc['monthly_savings']:.2f}\n"
+                f"    annual_savings:        {row.get('annual_savings')} -> {calc['annual_savings']:.2f}\n"
+                f"    roi_first_year:        {row.get('roi_first_year')} -> {calc['roi_first_year']:.2f}"
+            )
+
+    if pending and args.apply and not args.dry_run:
+        with get_connection() as conn:
+            for params in pending:
+                conn.execute(
+                    "UPDATE projects SET "
+                    "hours_saved_per_month = " + PLACEHOLDER + ", "
+                    "monthly_savings = " + PLACEHOLDER + ", "
+                    "annual_savings = " + PLACEHOLDER + ", "
+                    "payback_period_months = " + PLACEHOLDER + ", "
+                    "roi_first_year = " + PLACEHOLDER + ", "
+                    "updated_at = " + PLACEHOLDER + " "
+                    "WHERE id = " + PLACEHOLDER,
+                    params,
+                )
+            conn.commit()
+        print(f"\nCommit realizado (projects): {len(pending)} filas actualizadas.")
+
+    print(f"\nProyectos procesados: {len(rows)}")
+    print(f"  Actualizados: {updated}")
+    print(f"  Sin cambios:  {unchanged}")
+    print(f"  Omitidos:     {skipped} (parametros incompletos)")
+    print(f"  Errores:      {errors}")
+    if args.dry_run and pending:
+        print(f"\n  (DRY-RUN: {len(pending)} filas de projects se actualizarian en una corrida real con --apply)")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Recalcula snapshots financieros.")
     parser.add_argument("--dry-run", action="store_true", help="No escribe; solo reporta diferencias.")
@@ -71,6 +167,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.apply:
         print("Modo: APPLY (se escribiran cambios a la base de datos)")
 
+    print("\n########## Tabla: project_evaluations (historial) ##########")
     with get_connection() as conn:
         rows = conn.execute(
             "SELECT evaluation_id, project_id, monthly_savings, annual_savings, "
@@ -155,6 +252,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Errores:      {errors}")
     if args.dry_run and pending:
         print(f"\n  (DRY-RUN: {len(pending)} filas se actualizarian en una corrida real con --apply)")
+
+    print("\n########## Tabla: projects (estado vigente) ##########")
+    _recalculate_projects_table(args)
 
     # Validacion especifica HI-DDD-0002: verificar que el calculo sea correcto
     _validate_hi_ddd_0002(args.verbose)

@@ -28,6 +28,8 @@ Thumbs.db
 .streamlit/secrets.toml
 # Datos locales (nunca commitear)
 *.csv
+project_evaluations.backup_*.json
+projects.backup_*.json
 *.pptx
 *.db.bak
 # Claude Code config local

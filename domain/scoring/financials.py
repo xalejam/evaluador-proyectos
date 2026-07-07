@@ -14,7 +14,7 @@ def compute_financials(
     maintenance_monthly: float,
 ) -> dict[str, float]:
     time_saved = current_time_per_task * (time_reduction_percent / 100.0)
-    hours_saved_per_month = time_saved * tasks_per_month * staff_count
+    hours_saved_per_month = time_saved * tasks_per_month
     monthly_savings = hours_saved_per_month * avg_salary_per_hour
     annual_savings = monthly_savings * 12
     initial_development_cost = development_hours * development_cost_per_hour

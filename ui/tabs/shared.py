@@ -1006,6 +1006,12 @@ class ExcelSharePointManager:
             "actual_tasks_per_month",
             "adoption_rate",
             "user_satisfaction_score",
+            "survey_time_saved_percent",
+            "usage_frequency",
+            "nps_score",
+            "nps_promoters",
+            "nps_passives",
+            "nps_detractors",
             "unexpected_benefits",
             "challenges_faced",
             "lessons_learned",
@@ -1148,6 +1154,12 @@ class ExcelSharePointManager:
                     actual_tasks_per_month INTEGER,
                     adoption_rate REAL,
                     user_satisfaction_score REAL,
+                    survey_time_saved_percent REAL,
+                    usage_frequency TEXT,
+                    nps_score REAL,
+                    nps_promoters INTEGER,
+                    nps_passives INTEGER,
+                    nps_detractors INTEGER,
                     unexpected_benefits TEXT,
                     challenges_faced TEXT,
                     lessons_learned TEXT,
@@ -1160,6 +1172,7 @@ class ExcelSharePointManager:
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_tracking_project_id ON tracking(project_id)")
             self._ensure_projects_schema(conn)
+            self._ensure_tracking_schema(conn)
 
     def _ensure_projects_schema(self, conn):
         """Agrega columnas faltantes en instalaciones existentes."""
@@ -1177,6 +1190,26 @@ class ExcelSharePointManager:
         for col_name, col_type in required_cols.items():
             if col_name not in existing_cols:
                 conn.execute(f"ALTER TABLE projects ADD COLUMN {col_name} {col_type}")
+
+    def _ensure_tracking_schema(self, conn):
+        """Agrega columnas faltantes de tracking en instalaciones existentes."""
+        from infra.db.adapter import IS_CLOUD, db_table_columns
+
+        if IS_CLOUD:
+            return
+
+        existing_cols = db_table_columns(conn, "tracking")
+        required_cols = {
+            "survey_time_saved_percent": "REAL",
+            "usage_frequency": "TEXT",
+            "nps_score": "REAL",
+            "nps_promoters": "INTEGER",
+            "nps_passives": "INTEGER",
+            "nps_detractors": "INTEGER",
+        }
+        for col_name, col_type in required_cols.items():
+            if col_name not in existing_cols:
+                conn.execute(f"ALTER TABLE tracking ADD COLUMN {col_name} {col_type}")
 
     def load_from_local_excel(self, file_path: str = "project_viability.xlsx"):
         """Importa datos desde Excel local hacia SQLite."""

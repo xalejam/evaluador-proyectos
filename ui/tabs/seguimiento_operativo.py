@@ -8,10 +8,11 @@ independiente con:
 
 from __future__ import annotations
 
+import os
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 import pandas as pd
@@ -19,6 +20,7 @@ import streamlit as st
 
 from infra.db.adapter import PLACEHOLDER, db_read_dataframe
 from infra.db.connection import get_sqlite_conn as get_conn
+from infra.feedback_survey_scheduler import register_feedback_survey
 from infra.presentation_ports import (
     InMemoryDestination,
     SqliteDataSource,
@@ -1596,6 +1598,22 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
                 try:
                     update_project_status(conn, selected_project.project_id, "implemented")
                     st.session_state.pop(confirm_close_key, None)
+                    survey_link = os.getenv("FEEDBACK_SURVEY_LINK", "").strip()
+                    survey_recipients = os.getenv("FEEDBACK_SURVEY_RECIPIENTS", "").strip()
+                    if survey_link and survey_recipients:
+                        register_feedback_survey(
+                            project_id=selected_project.project_id,
+                            project_name=selected_project.name,
+                            recipients=survey_recipients,
+                            survey_link=survey_link,
+                            send_after_months=1,
+                            send_at=datetime.utcnow(),
+                        )
+                        st.info("📝 Se registró una invitación de encuesta para este proyecto.")
+                    else:
+                        st.info(
+                            "ℹ️ Proyecto cerrado. Define FEEDBACK_SURVEY_LINK y FEEDBACK_SURVEY_RECIPIENTS para agendar la encuesta."
+                        )
                     st.success("✅ Proyecto cerrado correctamente.")
                     st.rerun()
                 except Exception as exc:
@@ -1607,6 +1625,45 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
     st.markdown("---")
 
     if str(selected_project.status or "").lower() == "implemented":
+        st.subheader("Lanzar encuesta de feedback")
+        with st.form(key=f"ops_feedback_test_form_{selected_project.project_id}", clear_on_submit=False):
+            test_recipients = st.text_input(
+                "Correos para la invitación",
+                value=os.getenv("FEEDBACK_SURVEY_RECIPIENTS", ""),
+                help="Separados por coma.",
+                key=f"ops_feedback_recipients_{selected_project.project_id}",
+            )
+            test_link = st.text_input(
+                "Link de la encuesta Forms",
+                value=os.getenv("FEEDBACK_SURVEY_LINK", ""),
+                help="Pega el link completo de la encuesta.",
+                key=f"ops_feedback_link_{selected_project.project_id}",
+            )
+            test_months = st.selectbox(
+                "Esperar",
+                options=[1, 3],
+                format_func=lambda value: f"{value} mes" if value == 1 else f"{value} meses",
+                key=f"ops_feedback_months_{selected_project.project_id}",
+            )
+            test_submitted = st.form_submit_button("Lanzar encuesta de prueba", type="secondary")
+
+        if test_submitted:
+            if not test_recipients.strip() or not test_link.strip():
+                st.error("Debes indicar los correos y el link de la encuesta para probar el flujo.")
+            else:
+                try:
+                    register_feedback_survey(
+                        project_id=selected_project.project_id,
+                        project_name=selected_project.name,
+                        recipients=test_recipients.strip(),
+                        survey_link=test_link.strip(),
+                        send_after_months=test_months,
+                        send_at=datetime.utcnow(),
+                    )
+                    st.success("✅ Se registró la encuesta de prueba para este proyecto.")
+                except Exception as exc:
+                    st.error(f"No se pudo registrar la encuesta: {exc}")
+
         st.subheader("Registrar actividad post-cierre")
         with st.form(key=f"ops_post_closure_form_{selected_project.project_id}", clear_on_submit=True):
             pc_author = st.text_input(

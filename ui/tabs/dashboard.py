@@ -238,13 +238,17 @@ def render_dashboard():
     if len(trackings) > 0:
         st.subheader(t("dashboard_tracking_metrics"))
 
-        col_track1, col_track2, col_track3, col_track4 = st.columns(4)
+        col_track1, col_track2, col_track3, col_track4, col_track5 = st.columns(5)
 
         # Calcular métricas de seguimiento
         avg_performance = trackings["performance_score"].mean()
         avg_efficiency = trackings["efficiency_ratio"].mean()
         avg_adoption = trackings["adoption_rate"].mean()
         avg_satisfaction = trackings["user_satisfaction_score"].mean()
+        if "survey_time_saved_percent" in trackings.columns:
+            avg_reported_time_saved = trackings["survey_time_saved_percent"].mean()
+        else:
+            avg_reported_time_saved = None
 
         with col_track1:
             st.metric(t("dashboard_avg_performance"), f"{avg_performance:.0f}/100")
@@ -254,6 +258,86 @@ def render_dashboard():
             st.metric(t("dashboard_avg_adoption"), f"{avg_adoption:.0f}%")
         with col_track4:
             st.metric(t("dashboard_avg_satisfaction"), f"{avg_satisfaction:.1f}/10")
+        with col_track5:
+            if avg_reported_time_saved is None or pd.isna(avg_reported_time_saved):
+                st.metric(t("dashboard_avg_reported_time_saved"), "N/A")
+            else:
+                st.metric(t("dashboard_avg_reported_time_saved"), f"{avg_reported_time_saved:.1f}%")
+
+        has_feedback_columns = {"nps_score", "usage_frequency"}.issubset(set(trackings.columns))
+        if has_feedback_columns:
+            feedback_df = trackings.copy()
+            feedback_df["nps_score"] = pd.to_numeric(feedback_df["nps_score"], errors="coerce")
+            feedback_df = feedback_df[feedback_df["nps_score"].between(0, 10)]
+
+            if not feedback_df.empty:
+                st.subheader(t("dashboard_feedback_metrics"))
+
+                promoters = int((feedback_df["nps_score"] >= 9).sum())
+                passives = int(feedback_df["nps_score"].between(7, 8).sum())
+                detractors = int((feedback_df["nps_score"] <= 6).sum())
+                total_nps = len(feedback_df)
+                pct_promoters = (promoters / total_nps * 100) if total_nps else 0
+                pct_passives = (passives / total_nps * 100) if total_nps else 0
+                pct_detractors = (detractors / total_nps * 100) if total_nps else 0
+                nps_net = pct_promoters - pct_detractors
+
+                col_fb1, col_fb2, col_fb3 = st.columns(3)
+                with col_fb1:
+                    st.metric(t("dashboard_avg_nps"), f"{feedback_df['nps_score'].mean():.1f}/10")
+                with col_fb2:
+                    st.metric(t("dashboard_nps_net"), f"{nps_net:.0f}")
+                with col_fb3:
+                    st.metric(
+                        t("dashboard_nps_segments"),
+                        f"{pct_promoters:.0f}% / {pct_passives:.0f}% / {pct_detractors:.0f}%",
+                    )
+
+                col_fb_chart1, col_fb_chart2 = st.columns(2)
+                with col_fb_chart1:
+                    frequency_series = (
+                        feedback_df["usage_frequency"]
+                        .fillna("")
+                        .astype(str)
+                        .str.strip()
+                    )
+                    frequency_series = frequency_series[frequency_series != ""]
+                    if not frequency_series.empty:
+                        freq_counts = frequency_series.value_counts()
+                        fig_freq = px.pie(
+                            values=freq_counts.values,
+                            names=freq_counts.index,
+                            title=t("dashboard_usage_frequency_distribution"),
+                        )
+                        fig_freq.update_layout(height=350)
+                        st.plotly_chart(fig_freq, use_container_width=True)
+
+                with col_fb_chart2:
+                    feedback_scatter = feedback_df.dropna(subset=["user_satisfaction_score", "nps_score"]).copy()
+                    if not feedback_scatter.empty:
+                        feedback_scatter["user_satisfaction_score"] = pd.to_numeric(
+                            feedback_scatter["user_satisfaction_score"], errors="coerce"
+                        )
+                        feedback_scatter = feedback_scatter.dropna(subset=["user_satisfaction_score"])
+                        if not feedback_scatter.empty:
+                            fig_nps_sat = px.scatter(
+                                feedback_scatter,
+                                x="user_satisfaction_score",
+                                y="nps_score",
+                                color="usage_frequency",
+                                title=t("dashboard_nps_vs_satisfaction"),
+                                labels={
+                                    "user_satisfaction_score": t("feedback_satisfaction_metric"),
+                                    "nps_score": t("feedback_nps_metric"),
+                                    "usage_frequency": t("feedback_frequency_metric"),
+                                },
+                            )
+                            fig_nps_sat.update_layout(height=350)
+                            st.plotly_chart(fig_nps_sat, use_container_width=True)
+            else:
+                st.info(t("dashboard_no_feedback_data"))
+        else:
+            st.info(t("dashboard_no_feedback_data"))
 
         # Gráfico de performance vs score inicial
         if len(trackings) > 1:

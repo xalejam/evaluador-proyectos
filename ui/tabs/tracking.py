@@ -23,12 +23,10 @@ def auto_process_feedback():
         if not os.path.exists(feedback_file):
             return None, f"{t('tracking_feedback_file_not_found')} {feedback_file}"
 
-        # Verificar que tiene las columnas correctas
+        # Verificar que se puede leer el archivo
         try:
             df = pd.read_excel(feedback_file)
-            required_cols = ["ID DEL PROYECTO", "Â¿Qué tan satisfecho/a estás con la nueva herramienta?"]
-            if not all(col in df.columns for col in required_cols):
-                return None, f"{t('tracking_feedback_missing_columns')} {feedback_file}"
+            df.columns = [col.strip().replace('\xa0', ' ') for col in df.columns]
         except Exception as e:
             return None, f"{t('tracking_feedback_read_error')} {feedback_file}: {str(e)}"
 

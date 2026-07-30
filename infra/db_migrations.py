@@ -181,6 +181,45 @@ def ensure_evaluations_schema(conn) -> None:
     conn.commit()
 
 
+def ensure_tracking_schema(conn) -> None:
+    """Asegura columnas adicionales para tracking de feedback expandido."""
+    from infra.db.adapter import IS_CLOUD
+
+    if IS_CLOUD:
+        return
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS tracking (
+            id TEXT PRIMARY KEY,
+            project_id TEXT,
+            tracking_date TEXT,
+            months_tracked INTEGER,
+            actual_time_per_task REAL,
+            actual_tasks_per_month INTEGER,
+            adoption_rate REAL,
+            user_satisfaction_score REAL,
+            unexpected_benefits TEXT,
+            challenges_faced TEXT,
+            lessons_learned TEXT,
+            performance_score REAL,
+            efficiency_ratio REAL,
+            actual_time_reduction_percent REAL,
+            actual_monthly_savings REAL,
+            actual_annual_savings REAL
+        )
+        """
+    )
+
+    _add_column_if_missing(conn, "tracking", "survey_time_saved_percent REAL")
+    _add_column_if_missing(conn, "tracking", "usage_frequency TEXT")
+    _add_column_if_missing(conn, "tracking", "nps_score REAL")
+    _add_column_if_missing(conn, "tracking", "nps_promoters INTEGER")
+    _add_column_if_missing(conn, "tracking", "nps_passives INTEGER")
+    _add_column_if_missing(conn, "tracking", "nps_detractors INTEGER")
+    conn.commit()
+
+
 def _create_notes_views(conn) -> None:
     conn.execute("DROP VIEW IF EXISTS v_project_latest_notes")
     conn.execute("DROP VIEW IF EXISTS v_project_last_note")
@@ -494,6 +533,7 @@ def ensure_all_operational_schema(conn) -> None:
         fix_pg_sequences(conn)  # sincroniza secuencias SERIAL tras cualquier migración de datos
         return
     ensure_projects_schema(conn)
+    ensure_tracking_schema(conn)
     ensure_evaluations_schema(conn)
     ensure_notes_schema(conn)
     ensure_members_schema(conn)

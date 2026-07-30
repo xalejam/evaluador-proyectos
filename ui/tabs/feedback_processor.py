@@ -16,26 +16,78 @@ class FeedbackProcessor:
         self.excel_manager = excel_manager
         self.calculator = calculator
 
+        self.frequency_options = ["Diario", "Semanal", "Mensual", "Ocasional"]
+
         # Mapeo de columnas del cuestionario
         self.column_mapping = {
             "project_id": "ID DEL PROYECTO",
-            "satisfaction": "Â¿Qué tan satisfecho/a estás con la nueva herramienta?",
-            "time_saved_text": "Â¿Cuánto tiempo te ahorra comparado con el proceso anterior?",
-            "time_saved_percent": "Â¿Qué porcentaje de tiempo te ahorra comparado con el proceso anterior?",
-            "benefits": "Â¿Qué beneficios adicionales has notado? (opcional)",
-            "problems": "Â¿Qué problemas o dificultades has enfrentado? (opcional)",
-            "processed": "Procesado",  # Columna L para marcar como procesado
+            "satisfaction": "¿Qué tan satisfecho/a estás con la nueva herramienta?",
+            "usage_frequency": "¿Con qué frecuencia utilizas esta herramienta?",
+            "time_saved_percent": "¿Qué porcentaje de tiempo te ahorra comparado con el proceso anterior?",
+            "benefits": "¿Qué beneficios adicionales has notado? (opcional)",
+            "problems": "¿Qué problemas o dificultades has enfrentado? (opcional)",
+            "nps_score": "¿Qué tan probable es que recomiendes esta herramienta a un compañero?",
+            "processed": "Procesado",
         }
+
+        # Variantes permitidas para compatibilidad de exportes de formularios.
+        self.column_aliases = {
+            "project_id": ["ID DEL PROYECTO", "ID DEL PROYECTO a evaluar"],
+            "satisfaction": ["¿Qué tan satisfecho/a estás con la nueva herramienta?"],
+            "usage_frequency": ["¿Con qué frecuencia utilizas esta herramienta?"],
+            "time_saved_percent": ["¿Qué porcentaje de tiempo te ahorra comparado con el proceso anterior?"],
+            "benefits": [
+                "¿Qué beneficios adicionales has notado?",
+                "¿Qué beneficios adicionales has notado? (opcional)",
+            ],
+            "problems": [
+                "¿Qué problemas o dificultades has enfrentado?",
+                "¿Qué problemas o dificultades has enfrentado? (opcional)",
+            ],
+            "nps_score": ["¿Qué tan probable es que recomiendes esta herramienta a un compañero?"],
+            "processed": ["Procesado"],
+        }
+
+    def _pick_column(self, df: pd.DataFrame, field_key: str, required: bool = False) -> str | None:
+        aliases = self.column_aliases.get(field_key, [self.column_mapping[field_key]])
+        for col in aliases:
+            if col in df.columns:
+                return col
+        if required:
+            return aliases[0]
+        return None
+
+    def _to_number_series(self, series: pd.Series) -> pd.Series:
+        normalized = (
+            series.astype(str)
+            .str.strip()
+            .str.replace("%", "", regex=False)
+            .str.replace(" ", "", regex=False)
+            .str.replace(",", ".", regex=False)
+        )
+        normalized = normalized.replace({"": None, "nan": None, "None": None})
+        return pd.to_numeric(normalized, errors="coerce")
+
+    def _normalize_frequency(self, value: str) -> str | None:
+        cleaned = str(value).strip().lower()
+        mapping = {
+            "diario": "Diario",
+            "semanal": "Semanal",
+            "mensual": "Mensual",
+            "ocasional": "Ocasional",
+        }
+        return mapping.get(cleaned)
 
     def load_feedback_excel(self, file_path_or_buffer):
         """Carga el Excel del cuestionario"""
         try:
             if isinstance(file_path_or_buffer, str):
-                # Es una ruta de archivo
                 df = pd.read_excel(file_path_or_buffer)
             else:
-                # Es un buffer (archivo subido)
                 df = pd.read_excel(file_path_or_buffer)
+
+            # Normalizar nombres de columna: quitar espacios y non-breaking spaces (\xa0)
+            df.columns = [col.strip().replace('\xa0', ' ') for col in df.columns]
 
             return df
         except Exception as e:
@@ -48,13 +100,10 @@ class FeedbackProcessor:
             return None
 
         # Verificar que existan las columnas necesarias
-        required_columns = [
-            self.column_mapping["project_id"],
-            self.column_mapping["satisfaction"],
-            self.column_mapping["time_saved_percent"],
-        ]
+        required_fields = ["project_id", "satisfaction", "usage_frequency", "time_saved_percent", "nps_score"]
+        resolved_required = {field: self._pick_column(df, field, required=True) for field in required_fields}
 
-        missing_columns = [col for col in required_columns if col not in df.columns]
+        missing_columns = [resolved_required[field] for field in required_fields if resolved_required[field] not in df.columns]
         if missing_columns:
             st.error(f"{t('feedback_missing_columns')}: {missing_columns}")
             return None
@@ -63,29 +112,55 @@ class FeedbackProcessor:
         df_clean = df.copy()
 
         # Limpiar project_id
-        df_clean[self.column_mapping["project_id"]] = (
-            df_clean[self.column_mapping["project_id"]].astype(str).str.strip()
-        )
+        project_col = resolved_required["project_id"]
+        df_clean[project_col] = df_clean[project_col].astype(str).str.strip()
 
         # Limpiar satisfacción (debe ser 1-10)
-        satisfaction_col = self.column_mapping["satisfaction"]
-        df_clean[satisfaction_col] = pd.to_numeric(df_clean[satisfaction_col], errors="coerce")
+        satisfaction_col = resolved_required["satisfaction"]
+        df_clean[satisfaction_col] = self._to_number_series(df_clean[satisfaction_col])
         df_clean = df_clean[df_clean[satisfaction_col].between(1, 10)]
 
-        # Limpiar porcentaje de tiempo ahorrado (1-10 â†’ 0-100%)
-        time_percent_col = self.column_mapping["time_saved_percent"]
-        df_clean[time_percent_col] = pd.to_numeric(df_clean[time_percent_col], errors="coerce")
-        df_clean = df_clean[df_clean[time_percent_col].between(1, 10)]
+        # Limpiar frecuencia (opciones cerradas)
+        frequency_col = resolved_required["usage_frequency"]
+        df_clean[frequency_col] = df_clean[frequency_col].apply(self._normalize_frequency)
+        df_clean = df_clean[df_clean[frequency_col].isin(self.frequency_options)]
 
-        # Convertir escala 1-10 a porcentaje 0-100%
-        df_clean["time_reduction_percent"] = ((df_clean[time_percent_col] - 1) / 9) * 100
+        # Limpiar porcentaje de tiempo ahorrado (rango 0-100, acepta 12.5 y 12,5)
+        time_percent_col = resolved_required["time_saved_percent"]
+        df_clean[time_percent_col] = self._to_number_series(df_clean[time_percent_col])
+        df_clean = df_clean[df_clean[time_percent_col].between(0, 100)]
+        df_clean["time_reduction_percent"] = df_clean[time_percent_col]
+
+        # Limpiar NPS (0-10)
+        nps_col = resolved_required["nps_score"]
+        df_clean[nps_col] = self._to_number_series(df_clean[nps_col])
+        df_clean = df_clean[df_clean[nps_col].between(0, 10)]
 
         # Limpiar textos
-        if self.column_mapping["benefits"] in df_clean.columns:
-            df_clean[self.column_mapping["benefits"]] = df_clean[self.column_mapping["benefits"]].fillna("").astype(str)
+        benefits_col = self._pick_column(df_clean, "benefits")
+        if benefits_col in df_clean.columns:
+            df_clean[benefits_col] = df_clean[benefits_col].fillna("").astype(str)
 
-        if self.column_mapping["problems"] in df_clean.columns:
-            df_clean[self.column_mapping["problems"]] = df_clean[self.column_mapping["problems"]].fillna("").astype(str)
+        problems_col = self._pick_column(df_clean, "problems")
+        if problems_col in df_clean.columns:
+            df_clean[problems_col] = df_clean[problems_col].fillna("").astype(str)
+
+        # Uniformar nombres de columnas opcionales para el resto del flujo
+        if benefits_col and benefits_col != self.column_mapping["benefits"]:
+            df_clean[self.column_mapping["benefits"]] = df_clean[benefits_col]
+        if problems_col and problems_col != self.column_mapping["problems"]:
+            df_clean[self.column_mapping["problems"]] = df_clean[problems_col]
+
+        if project_col != self.column_mapping["project_id"]:
+            df_clean[self.column_mapping["project_id"]] = df_clean[project_col]
+        if satisfaction_col != self.column_mapping["satisfaction"]:
+            df_clean[self.column_mapping["satisfaction"]] = df_clean[satisfaction_col]
+        if frequency_col != self.column_mapping["usage_frequency"]:
+            df_clean[self.column_mapping["usage_frequency"]] = df_clean[frequency_col]
+        if time_percent_col != self.column_mapping["time_saved_percent"]:
+            df_clean[self.column_mapping["time_saved_percent"]] = df_clean[time_percent_col]
+        if nps_col != self.column_mapping["nps_score"]:
+            df_clean[self.column_mapping["nps_score"]] = df_clean[nps_col]
 
         # Agregar columna de procesado si no existe
         if self.column_mapping["processed"] not in df_clean.columns:
@@ -113,8 +188,10 @@ class FeedbackProcessor:
 
         project_id_col = self.column_mapping["project_id"]
         satisfaction_col = self.column_mapping["satisfaction"]
+        frequency_col = self.column_mapping["usage_frequency"]
         benefits_col = self.column_mapping["benefits"]
         problems_col = self.column_mapping["problems"]
+        nps_col = self.column_mapping["nps_score"]
 
         aggregated = {}
 
@@ -124,6 +201,14 @@ class FeedbackProcessor:
             # Calcular promedios
             avg_satisfaction = project_responses[satisfaction_col].mean()
             avg_time_reduction = project_responses["time_reduction_percent"].mean()
+            avg_nps = project_responses[nps_col].mean()
+
+            freq_mode = project_responses[frequency_col].mode(dropna=True)
+            most_common_frequency = freq_mode.iloc[0] if not freq_mode.empty else ""
+
+            promoters = int((project_responses[nps_col] >= 9).sum())
+            passives = int(project_responses[nps_col].between(7, 8).sum())
+            detractors = int((project_responses[nps_col] <= 6).sum())
 
             # Concatenar textos (eliminar vací­os y duplicados)
             benefits_list = [
@@ -140,8 +225,14 @@ class FeedbackProcessor:
             aggregated[project_id] = {
                 "user_satisfaction_score": round(avg_satisfaction, 1),
                 "time_reduction_percent": round(avg_time_reduction, 1),
+                "survey_time_saved_percent": round(avg_time_reduction, 1),
                 "unexpected_benefits": " | ".join(benefits_unique) if benefits_unique else "",
                 "challenges_faced": " | ".join(problems_unique) if problems_unique else "",
+                "usage_frequency": most_common_frequency,
+                "nps_score": round(avg_nps, 1),
+                "nps_promoters": promoters,
+                "nps_passives": passives,
+                "nps_detractors": detractors,
                 "response_count": len(project_responses),
                 "adoption_rate": 85,  # Valor por defecto, se puede ajustar
             }
@@ -167,6 +258,13 @@ class FeedbackProcessor:
         # Para tiempo de reducción, tomar el nuevo (más actualizado)
         time_reduction = new_data["time_reduction_percent"]
 
+        existing_nps = latest_tracking.get("nps_score")
+        new_nps = new_data.get("nps_score")
+        if existing_nps is not None and pd.notna(existing_nps) and new_nps is not None and pd.notna(new_nps):
+            merged_nps = round((float(existing_nps) + float(new_nps)) / 2, 1)
+        else:
+            merged_nps = new_nps
+
         # Concatenar textos
         existing_benefits = latest_tracking.get("unexpected_benefits", "")
         new_benefits = new_data["unexpected_benefits"]
@@ -182,8 +280,14 @@ class FeedbackProcessor:
             {
                 "user_satisfaction_score": round(avg_satisfaction, 1),
                 "time_reduction_percent": time_reduction,
+                "survey_time_saved_percent": new_data.get("survey_time_saved_percent", time_reduction),
                 "unexpected_benefits": combined_benefits,
                 "challenges_faced": combined_problems,
+                "usage_frequency": new_data.get("usage_frequency", latest_tracking.get("usage_frequency", "")),
+                "nps_score": merged_nps,
+                "nps_promoters": new_data.get("nps_promoters", latest_tracking.get("nps_promoters", 0)),
+                "nps_passives": new_data.get("nps_passives", latest_tracking.get("nps_passives", 0)),
+                "nps_detractors": new_data.get("nps_detractors", latest_tracking.get("nps_detractors", 0)),
                 "adoption_rate": new_data.get("adoption_rate", latest_tracking.get("adoption_rate", 85)),
                 "months_tracked": latest_tracking.get("months_tracked", 3),
                 "actual_time_per_task": latest_tracking.get("actual_time_per_task", 0),
@@ -234,6 +338,12 @@ class FeedbackProcessor:
                 "actual_tasks_per_month": merged_data.get("actual_tasks_per_month", project["tasks_per_month"]),
                 "adoption_rate": merged_data["adoption_rate"],
                 "user_satisfaction_score": merged_data["user_satisfaction_score"],
+                "survey_time_saved_percent": merged_data.get("survey_time_saved_percent", time_reduction_percent),
+                "usage_frequency": merged_data.get("usage_frequency", ""),
+                "nps_score": merged_data.get("nps_score"),
+                "nps_promoters": merged_data.get("nps_promoters", 0),
+                "nps_passives": merged_data.get("nps_passives", 0),
+                "nps_detractors": merged_data.get("nps_detractors", 0),
                 "unexpected_benefits": merged_data["unexpected_benefits"],
                 "challenges_faced": merged_data["challenges_faced"],
                 "lessons_learned": merged_data.get("lessons_learned", ""),
@@ -325,6 +435,8 @@ class FeedbackProcessor:
                             "responses": feedback_data["response_count"],
                             "satisfaction": feedback_data["user_satisfaction_score"],
                             "time_reduction": feedback_data["time_reduction_percent"],
+                            "usage_frequency": feedback_data.get("usage_frequency", ""),
+                            "nps_score": feedback_data.get("nps_score"),
                         }
                     )
                 else:
@@ -401,6 +513,10 @@ def render_feedback_processor():
                                 st.metric(t("feedback_satisfaction_metric"), f"{project['satisfaction']}/10")
                             with col_p3:
                                 st.metric(t("feedback_time_saved_metric"), f"{project['time_reduction']:.1f}%")
+                            st.caption(
+                                f"{t('feedback_frequency_metric')}: {project.get('usage_frequency', 'N/A')} | "
+                                f"{t('feedback_nps_metric')}: {project.get('nps_score', 'N/A')}"
+                            )
 
                 # Mostrar errores si los hay
                 if results["errors"]:
@@ -425,7 +541,12 @@ def render_feedback_processor():
 
         with col_conv2:
             st.markdown(t("feedback_time_saved_conversion_markdown"))
-            time_example = pd.DataFrame({"Cuestionario (1-10)": [1, 3, 7, 10], "Tracking (%)": [0, 22.2, 66.7, 100]})
+            time_example = pd.DataFrame(
+                {
+                    "Entrada encuesta": ["0", "12.5", "12,5", "100"],
+                    "Tiempo ahorrado (%)": [0, 12.5, 12.5, 100],
+                }
+            )
             st.dataframe(time_example, hide_index=True)
 
     with tab3:
@@ -442,6 +563,8 @@ def render_feedback_processor():
                         "ID": project["id"],
                         "Nombre": project["name"],
                         "Satisfacción": f"{latest.get('user_satisfaction_score', 0)}/10",
+                        "NPS": f"{latest.get('nps_score', 'N/A')}",
+                        "Frecuencia": latest.get("usage_frequency", "N/A") or "N/A",
                         "Adopción": f"{latest.get('adoption_rate', 0)}%",
                         "Última Actualización": (
                             latest.get("tracking_date", "")[:10] if latest.get("tracking_date") else "N/A"

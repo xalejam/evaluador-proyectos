@@ -71,3 +71,54 @@ def test_multiple_entries_same_date_and_two_dates():
 
 def test_no_entries_returns_empty_list():
     assert parse_bitacora_markdown("# Bitácora\n\nSin entradas todavía.\n") == []
+
+
+from domain.services.bitacora_sync_service import (
+    BitacoraDocument,
+    build_entry_group_id,
+    slugify_author,
+)
+
+
+def test_slugify_author_strips_accents_and_spaces():
+    assert slugify_author("Xiomara Monroy") == "xiomara-monroy"
+    assert slugify_author("Luis Astudillo") == "luis-astudillo"
+
+
+def test_build_entry_group_id_disambiguates_collision():
+    existing = {"MX-DDD-0005-2026-08-14-xiomara-monroy"}
+    new_id = build_entry_group_id("MX-DDD-0005", "2026-08-14", "Xiomara Monroy", existing)
+    assert new_id == "MX-DDD-0005-2026-08-14-xiomara-monroy-2"
+
+
+def test_assigns_id_to_entry_missing_one():
+    doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
+    new_entries = doc.assign_missing_entry_group_ids("MX-DDD-0005")
+    assert len(new_entries) == 1
+    assert new_entries[0].entry_group_id == "MX-DDD-0005-2026-08-14-xiomara-monroy"
+    assert "<!-- entry_group_id: MX-DDD-0005-2026-08-14-xiomara-monroy -->" in doc.lines
+
+
+def test_does_not_reassign_existing_id():
+    text = (
+        "## 2026-08-14\n\n### Xiomara Monroy — 4h\n"
+        "<!-- entry_group_id: custom-id -->\n\n**Qué se hizo**\n- a\n"
+    )
+    doc = BitacoraDocument(text)
+    new_entries = doc.assign_missing_entry_group_ids("MX-DDD-0005")
+    assert new_entries == []
+    assert doc.entries()[0].entry_group_id == "custom-id"
+
+
+def test_disambiguates_two_entries_same_author_same_day():
+    text = (
+        "## 2026-08-14\n\n### Xiomara Monroy — 2h\n\n**Qué se hizo**\n- mañana\n\n"
+        "### Xiomara Monroy — 3h\n\n**Qué se hizo**\n- tarde\n"
+    )
+    doc = BitacoraDocument(text)
+    new_entries = doc.assign_missing_entry_group_ids("MX-DDD-0005")
+    ids = [e.entry_group_id for e in new_entries]
+    assert ids == [
+        "MX-DDD-0005-2026-08-14-xiomara-monroy",
+        "MX-DDD-0005-2026-08-14-xiomara-monroy-2",
+    ]

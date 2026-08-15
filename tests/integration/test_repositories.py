@@ -1,4 +1,6 @@
-﻿from infra.db.repositories.evaluation_repo import EvaluationRepository
+﻿import sqlite3
+
+from infra.db.repositories.evaluation_repo import EvaluationRepository
 from infra.db.repositories.notes_repo import NotesRepository
 from infra.db.repositories.project_repo import ProjectRepository
 
@@ -71,3 +73,52 @@ def test_evaluation_repo_insert_and_list(temp_db_path):
     assert len(rows) >= 1
     assert rows[0]["project_id"] == "MX-TEST-0001"
     assert rows[0]["action"] == "evaluation_saved"
+
+
+def test_notes_repo_insert_persists_effort_hours(temp_db_path):
+    project_repo = ProjectRepository(str(temp_db_path))
+    notes_repo = NotesRepository(str(temp_db_path))
+    _seed_project(project_repo)
+
+    note_ids = notes_repo.insert_notes_batch(
+        [
+            {
+                "project_id": "MX-TEST-0001",
+                "note_type": "general",
+                "note_text": "Avance semanal",
+                "author": "tester",
+                "entry_group_id": "grp-hours",
+                "effort_hours": 6.5,
+            }
+        ]
+    )
+
+    conn = sqlite3.connect(str(temp_db_path))
+    conn.row_factory = sqlite3.Row
+    row = conn.execute("SELECT effort_hours FROM project_notes WHERE note_id = ?", (note_ids[0],)).fetchone()
+    conn.close()
+    assert row["effort_hours"] == 6.5
+
+
+def test_notes_repo_insert_effort_hours_defaults_to_none(temp_db_path):
+    project_repo = ProjectRepository(str(temp_db_path))
+    notes_repo = NotesRepository(str(temp_db_path))
+    _seed_project(project_repo)
+
+    note_ids = notes_repo.insert_notes_batch(
+        [
+            {
+                "project_id": "MX-TEST-0001",
+                "note_type": "general",
+                "note_text": "Sin horas",
+                "author": "tester",
+                "entry_group_id": "grp-no-hours",
+            }
+        ]
+    )
+
+    conn = sqlite3.connect(str(temp_db_path))
+    conn.row_factory = sqlite3.Row
+    row = conn.execute("SELECT effort_hours FROM project_notes WHERE note_id = ?", (note_ids[0],)).fetchone()
+    conn.close()
+    assert row["effort_hours"] is None

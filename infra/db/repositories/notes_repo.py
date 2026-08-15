@@ -30,6 +30,9 @@ class NotesRepository:
                 raise ValueError("progress_percent must be an integer between 0 and 100.")
             if progress_percent is not None and not (0 <= progress_percent <= 100):
                 raise ValueError("progress_percent must be between 0 and 100.")
+            effort_hours = n.get("effort_hours")
+            if effort_hours in ("", None):
+                effort_hours = None
             cleaned.append(
                 (
                     str(n.get("project_id", "")).strip(),
@@ -42,20 +45,21 @@ class NotesRepository:
                     str(n.get("note_title", "")).strip(),
                     progress_percent,
                     str(n.get("estimated_end_date", "")).strip() or None,
+                    effort_hours,
                     now,
                 )
             )
         if not cleaned:
             return []
 
-        placeholders_str = ", ".join([PLACEHOLDER] * 11)
+        placeholders_str = ", ".join([PLACEHOLDER] * 12)
         with get_sqlite_conn(self.db_path) as conn:
             conn.executemany(
                 f"""
                 INSERT INTO project_notes
                     (
                         project_id, note_text, note_type, author, tags, is_private, entry_group_id, note_title,
-                        progress_percent, estimated_end_date, created_at
+                        progress_percent, estimated_end_date, effort_hours, created_at
                     )
                 VALUES ({placeholders_str})
                 """,

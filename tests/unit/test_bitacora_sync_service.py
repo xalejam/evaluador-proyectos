@@ -122,3 +122,48 @@ def test_disambiguates_two_entries_same_author_same_day():
         "MX-DDD-0005-2026-08-14-xiomara-monroy",
         "MX-DDD-0005-2026-08-14-xiomara-monroy-2",
     ]
+
+
+from domain.services.bitacora_sync_service import render_entry_block
+
+
+def test_render_entry_block_includes_hours_and_via_app_marker():
+    entry = BitacoraEntry(
+        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
+        entry_group_id="gid-1", avance_override=None, sections={"general": "- b"},
+    )
+    block = render_entry_block(entry)
+    assert block.startswith("### Luis Astudillo — 2h _(vía app)_\n")
+    assert "<!-- entry_group_id: gid-1 -->" in block
+    assert "- b" in block
+
+
+def test_render_entry_block_omits_hours_when_none():
+    entry = BitacoraEntry(
+        date="2026-08-14", author="Luis Astudillo", hours=None, via_app=False,
+        entry_group_id="gid-1", avance_override=None, sections={"general": "- b"},
+    )
+    assert render_entry_block(entry).startswith("### Luis Astudillo\n")
+
+
+def test_append_pulled_entry_to_existing_date():
+    doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
+    pulled = BitacoraEntry(
+        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
+        entry_group_id="gid-2", avance_override=None, sections={"general": "- b"},
+    )
+    doc.append_pulled_entry(pulled)
+    text = doc.render()
+    assert "### Luis Astudillo — 2h _(vía app)_" in text
+    assert text.index("Xiomara Monroy") < text.index("Luis Astudillo")
+
+
+def test_append_pulled_entry_creates_new_date_at_top():
+    doc = BitacoraDocument("## 2026-08-13\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
+    pulled = BitacoraEntry(
+        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
+        entry_group_id="gid-2", avance_override=None, sections={"general": "- b"},
+    )
+    doc.append_pulled_entry(pulled)
+    text = doc.render()
+    assert text.index("## 2026-08-14") < text.index("## 2026-08-13")

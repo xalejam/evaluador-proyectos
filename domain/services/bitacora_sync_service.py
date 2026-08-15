@@ -152,3 +152,40 @@ class BitacoraDocument:
                 continue
             i += 1
         return [e for e in self.entries() if e.entry_group_id and e.entry_group_id not in ids_before]
+
+    def append_pulled_entry(self, entry: BitacoraEntry) -> None:
+        block_lines = render_entry_block(entry).splitlines()
+        date_idx = next(
+            (i for i, line in enumerate(self.lines) if DATE_RE.match(line) and DATE_RE.match(line).group(1) == entry.date),
+            None,
+        )
+        if date_idx is not None:
+            j = date_idx + 1
+            while j < len(self.lines) and not DATE_RE.match(self.lines[j]):
+                j += 1
+            self.lines[j:j] = [""] + block_lines
+        else:
+            first_h2 = next((i for i, line in enumerate(self.lines) if DATE_RE.match(line)), len(self.lines))
+            new_block = [f"## {entry.date}", ""] + block_lines + [""]
+            self.lines[first_h2:first_h2] = new_block
+
+
+_SECTION_LABELS = (("Bloqueador", "bloqueador"), ("Riesgo", "riesgo"), ("Por dónde seguir", "proximo_paso"))
+
+
+def render_entry_block(entry: BitacoraEntry) -> str:
+    header = f"### {entry.author}"
+    if entry.hours is not None:
+        header += f" — {entry.hours:g}h"
+    if entry.via_app:
+        header += " _(vía app)_"
+    parts = [header, f"<!-- entry_group_id: {entry.entry_group_id} -->", ""]
+    if entry.sections.get("general"):
+        parts.append(entry.sections["general"])
+        parts.append("")
+    for label, note_type in _SECTION_LABELS:
+        if entry.sections.get(note_type):
+            parts.append(f"**{label}**")
+            parts.append(entry.sections[note_type])
+            parts.append("")
+    return "\n".join(parts).rstrip() + "\n"

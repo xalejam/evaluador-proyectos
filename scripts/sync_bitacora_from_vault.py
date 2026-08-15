@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Sincroniza bitacora.md del vault de Obsidian con project_notes en Supabase.
+
+Uso:
+    $env:DATABASE_URL = "postgresql://..."
+    python scripts/sync_bitacora_from_vault.py --vault "C:\\ruta\\al\\vault"
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from domain.services.bitacora_sync_service import sync_bitacora_file  # noqa: E402
+from infra.db.adapter import get_connection  # noqa: E402
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--vault", required=True, help="Ruta al repo del vault de Obsidian")
+    args = parser.parse_args()
+
+    vault_root = Path(args.vault)
+    bitacora_files = sorted(vault_root.glob("proyectos/*/bitacora.md"))
+    if not bitacora_files:
+        print(f"No se encontraron bitacora.md bajo {vault_root / 'proyectos'}")
+        return 1
+
+    conn = get_connection()
+    total_pushed = total_pulled = 0
+    skipped: list[str] = []
+    try:
+        for path in bitacora_files:
+            result = sync_bitacora_file(conn, path)
+            rel = path.relative_to(vault_root)
+            if result["skipped"]:
+                skipped.append(f"{rel} (project_id={result['project_id']!r} no existe en Supabase)")
+                continue
+            total_pushed += result["pushed"]
+            total_pulled += result["pulled"]
+            if result["pushed"] or result["pulled"]:
+                print(f"{rel}: +{result['pushed']} subidas, +{result['pulled']} bajadas")
+    finally:
+        conn.close()
+
+    print(f"\nTotal: {total_pushed} subidas, {total_pulled} bajadas.")
+    if skipped:
+        print(f"\n{len(skipped)} archivo(s) sin sincronizar (proyecto no dado de alta en Supabase):")
+        for line in skipped:
+            print(f"  - {line}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

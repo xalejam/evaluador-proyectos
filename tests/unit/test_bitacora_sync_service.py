@@ -281,3 +281,65 @@ def test_pull_new_entries_excludes_known_ids(temp_db_conn):
     assert pulled[0].via_app is True
 
     assert pull_new_entries(temp_db_conn, "MX-DDD-0005", known_ids={"gid-1"}) == []
+
+
+from pathlib import Path
+
+from domain.services.bitacora_sync_service import read_frontmatter_project_id, sync_bitacora_file
+
+
+def test_read_frontmatter_project_id():
+    text = "---\nproject_id: MX-DDD-0005\ntitulo: X\n---\n\n# Bitácora\n"
+    assert read_frontmatter_project_id(text) == "MX-DDD-0005"
+
+
+def test_read_frontmatter_project_id_missing_returns_none():
+    assert read_frontmatter_project_id("# Sin frontmatter\n") is None
+
+
+def test_sync_bitacora_file_pushes_new_local_entry(tmp_path, temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text(
+        "---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n"
+        "## 2026-08-14\n\n### Xiomara Monroy — 4.5h\n\n**Qué se hizo**\n- a\n",
+        encoding="utf-8",
+    )
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result == {"pushed": 1, "pulled": 0, "skipped": False, "project_id": "MX-DDD-0005"}
+
+    rows = temp_db_conn.execute("SELECT * FROM project_notes").fetchall()
+    assert len(rows) == 1
+    updated_text = bitacora.read_text(encoding="utf-8")
+    assert "entry_group_id: MX-DDD-0005-2026-08-14-xiomara-monroy" in updated_text
+    assert "_Acumulado del proyecto: 4.5h · Avance: sin dato_" in updated_text
+
+
+def test_sync_bitacora_file_pulls_app_entry(tmp_path, temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    push_entry(
+        temp_db_conn, "MX-DDD-0005",
+        BitacoraEntry(date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=False,
+                       entry_group_id="app-gid-1", avance_override=70, sections={"general": "Capturado en la app"}),
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result["pulled"] == 1
+    text = bitacora.read_text(encoding="utf-8")
+    assert "### Luis Astudillo — 2h _(vía app)_" in text
+    assert "Capturado en la app" in text
+
+
+def test_sync_bitacora_file_skips_project_not_in_supabase(tmp_path, temp_db_conn):
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text(
+        "---\nproject_id: NO-EXISTE-0001\n---\n\n## 2026-08-14\n\n### X — 1h\n\n**Qué se hizo**\n- a\n",
+        encoding="utf-8",
+    )
+    original = bitacora.read_text(encoding="utf-8")
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result["skipped"] is True
+    assert bitacora.read_text(encoding="utf-8") == original

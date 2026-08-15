@@ -321,3 +321,51 @@ def pull_new_entries(conn, project_id: str, known_ids: set[str]) -> list[Bitacor
             )
         )
     return entries
+
+
+from pathlib import Path  # noqa: E402
+
+FRONTMATTER_PROJECT_ID_RE = re.compile(r"^project_id:\s*(\S+)\s*$", re.MULTILINE)
+
+
+def read_frontmatter_project_id(text: str) -> str | None:
+    if not text.startswith("---"):
+        return None
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None
+    m = FRONTMATTER_PROJECT_ID_RE.search(text[3:end])
+    return m.group(1) if m else None
+
+
+def sync_bitacora_file(conn, vault_path: Path) -> dict:
+    text = vault_path.read_text(encoding="utf-8")
+    project_id = read_frontmatter_project_id(text)
+    if not project_id or not project_exists(conn, project_id):
+        return {"pushed": 0, "pulled": 0, "skipped": True, "project_id": project_id}
+
+    doc = BitacoraDocument(text)
+    new_local_entries = doc.assign_missing_entry_group_ids(project_id)
+    for entry in new_local_entries:
+        push_entry(conn, project_id, entry)
+
+    known_ids = doc.known_entry_group_ids()
+    pulled_entries = pull_new_entries(conn, project_id, known_ids)
+    for entry in pulled_entries:
+        doc.append_pulled_entry(entry)
+
+    touched_dates = {e.date for e in new_local_entries} | {e.date for e in pulled_entries}
+    if touched_dates:
+        total_hours, progress_percent = compute_rollup(conn, project_id)
+        for date in touched_dates:
+            doc.set_rollup(date, total_hours, progress_percent)
+
+    if new_local_entries or pulled_entries:
+        vault_path.write_text(doc.render(), encoding="utf-8")
+
+    return {
+        "pushed": len(new_local_entries),
+        "pulled": len(pulled_entries),
+        "skipped": False,
+        "project_id": project_id,
+    }

@@ -34,6 +34,7 @@ class OperationalTrackingService:
         note_title: str = "",
         progress_percent: int | None = None,
         estimated_end_date: str | None = None,
+        effort_hours: float | None = None,
     ) -> list[int]:
         entry_group_id = uuid.uuid4().hex
         notes = []
@@ -52,6 +53,7 @@ class OperationalTrackingService:
                         "is_private": False,
                         "progress_percent": progress_percent,
                         "estimated_end_date": estimated_end_date,
+                        "effort_hours": effort_hours if ntype == "general" else None,
                     }
                 )
         return self.notes_repo.insert_notes_batch(notes)

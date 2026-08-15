@@ -210,3 +210,114 @@ def render_entry_block(entry: BitacoraEntry) -> str:
 def _format_rollup(total_hours: float, progress_percent: int | None) -> str:
     avance_text = f"{progress_percent}%" if progress_percent is not None else "sin dato"
     return f"_Acumulado del proyecto: {total_hours:g}h · Avance: {avance_text}_"
+
+
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER  # noqa: E402
+
+
+def project_exists(conn, project_id: str) -> bool:
+    row = conn.execute(f"SELECT 1 FROM projects WHERE project_id = {PLACEHOLDER}", (project_id,)).fetchone()
+    return row is not None
+
+
+def find_existing_entry_group_ids(conn, project_id: str) -> set[str]:
+    rows = conn.execute(
+        f"SELECT DISTINCT entry_group_id FROM project_notes "
+        f"WHERE project_id = {PLACEHOLDER} AND entry_group_id IS NOT NULL AND entry_group_id != ''",
+        (project_id,),
+    ).fetchall()
+    return {(r["entry_group_id"] if isinstance(r, dict) else r[0]) for r in rows}
+
+
+def push_entry(conn, project_id: str, entry: BitacoraEntry) -> int:
+    """Inserta una fila de project_notes por cada sección presente.
+    Las horas solo se guardan en la fila 'general' — ver Global Constraints
+    del plan sobre por qué no se reusa NotesRepository.insert_notes_batch."""
+    inserted = 0
+    created_at = f"{entry.date} 12:00:00"
+    for note_type in NOTE_TYPES_IN_ORDER:
+        text = entry.sections.get(note_type, "").strip()
+        if not text:
+            continue
+        effort_hours = entry.hours if note_type == "general" else None
+        conn.execute(
+            f"""
+            INSERT INTO project_notes
+                (project_id, note_text, note_type, author, tags, is_private,
+                 entry_group_id, note_title, progress_percent, estimated_end_date,
+                 effort_hours, created_at)
+            VALUES ({', '.join([PLACEHOLDER] * 12)})
+            """,
+            (
+                project_id, text, note_type, entry.author, "", 0,
+                entry.entry_group_id, "", entry.avance_override, None,
+                effort_hours, created_at,
+            ),
+        )
+        inserted += 1
+    conn.commit()
+    return inserted
+
+
+def compute_rollup(conn, project_id: str) -> tuple[float, int | None]:
+    hours_row = conn.execute(
+        f"SELECT COALESCE(SUM(effort_hours), 0) AS total FROM project_notes WHERE project_id = {PLACEHOLDER}",
+        (project_id,),
+    ).fetchone()
+    total_hours = float(hours_row["total"] if isinstance(hours_row, dict) else hours_row[0])
+
+    order_by = "created_at DESC, note_id DESC" if IS_CLOUD else "datetime(created_at) DESC, note_id DESC"
+    progress_row = conn.execute(
+        f"""
+        SELECT progress_percent FROM project_notes
+        WHERE project_id = {PLACEHOLDER} AND progress_percent IS NOT NULL
+        ORDER BY {order_by} LIMIT 1
+        """,
+        (project_id,),
+    ).fetchone()
+    progress_percent = None
+    if progress_row is not None:
+        val = progress_row["progress_percent"] if isinstance(progress_row, dict) else progress_row[0]
+        progress_percent = int(val) if val is not None else None
+    return total_hours, progress_percent
+
+
+def pull_new_entries(conn, project_id: str, known_ids: set[str]) -> list[BitacoraEntry]:
+    order_by = "created_at ASC, note_id ASC" if IS_CLOUD else "datetime(created_at) ASC, note_id ASC"
+    rows = conn.execute(
+        f"""
+        SELECT note_id, note_type, note_text, author, effort_hours, created_at,
+               entry_group_id, progress_percent
+        FROM project_notes
+        WHERE project_id = {PLACEHOLDER} AND entry_group_id IS NOT NULL AND entry_group_id != ''
+        ORDER BY {order_by}
+        """,
+        (project_id,),
+    ).fetchall()
+
+    grouped: dict[str, list[dict]] = {}
+    for r in rows:
+        row = dict(r) if not isinstance(r, dict) else r
+        gid = row["entry_group_id"]
+        if gid in known_ids:
+            continue
+        grouped.setdefault(gid, []).append(row)
+
+    entries: list[BitacoraEntry] = []
+    for gid, group_rows in grouped.items():
+        first = group_rows[0]
+        sections = {r["note_type"]: r["note_text"] for r in group_rows if r["note_text"]}
+        hours = next((r["effort_hours"] for r in group_rows if r["effort_hours"] is not None), None)
+        avance = next((r["progress_percent"] for r in group_rows if r["progress_percent"] is not None), None)
+        entries.append(
+            BitacoraEntry(
+                date=str(first["created_at"])[:10],
+                author=first["author"],
+                hours=float(hours) if hours is not None else None,
+                via_app=True,
+                entry_group_id=gid,
+                avance_override=int(avance) if avance is not None else None,
+                sections=sections,
+            )
+        )
+    return entries

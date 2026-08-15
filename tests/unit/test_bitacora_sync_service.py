@@ -215,3 +215,69 @@ def test_set_rollup_raises_for_unknown_date():
     doc = BitacoraDocument("## 2026-08-13\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
     with _pytest.raises(ValueError):
         doc.set_rollup("2026-08-14", 4.0, None)
+
+
+from domain.services.bitacora_sync_service import (
+    compute_rollup,
+    find_existing_entry_group_ids,
+    project_exists,
+    pull_new_entries,
+    push_entry,
+)
+
+
+def test_project_exists_true_and_false(temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    assert project_exists(temp_db_conn, "MX-DDD-0005") is True
+    assert project_exists(temp_db_conn, "NO-EXISTE-0001") is False
+
+
+def test_push_entry_inserts_one_row_per_section_with_hours_only_on_general(temp_db_conn):
+    entry = BitacoraEntry(
+        date="2026-08-14", author="Xiomara Monroy", hours=4.5, via_app=False,
+        entry_group_id="MX-DDD-0005-2026-08-14-xiomara-monroy", avance_override=65,
+        sections={"general": "Se hizo x", "bloqueador": "Falta y"},
+    )
+    inserted = push_entry(temp_db_conn, "MX-DDD-0005", entry)
+    assert inserted == 2
+    rows = temp_db_conn.execute(
+        "SELECT note_type, effort_hours, progress_percent FROM project_notes ORDER BY note_type"
+    ).fetchall()
+    by_type = {r["note_type"]: dict(r) for r in rows}
+    assert by_type["general"]["effort_hours"] == 4.5
+    assert by_type["bloqueador"]["effort_hours"] is None
+    assert by_type["general"]["progress_percent"] == 65
+
+
+def test_find_existing_entry_group_ids(temp_db_conn):
+    entry = BitacoraEntry(
+        date="2026-08-14", author="X", hours=1.0, via_app=False,
+        entry_group_id="gid-1", avance_override=None, sections={"general": "x"},
+    )
+    push_entry(temp_db_conn, "MX-DDD-0005", entry)
+    assert find_existing_entry_group_ids(temp_db_conn, "MX-DDD-0005") == {"gid-1"}
+
+
+def test_compute_rollup_sums_hours_and_gets_latest_progress(temp_db_conn):
+    e1 = BitacoraEntry(date="2026-08-13", author="X", hours=3.0, via_app=False,
+                        entry_group_id="gid-1", avance_override=50, sections={"general": "a"})
+    e2 = BitacoraEntry(date="2026-08-14", author="X", hours=4.5, via_app=False,
+                        entry_group_id="gid-2", avance_override=65, sections={"general": "b"})
+    push_entry(temp_db_conn, "MX-DDD-0005", e1)
+    push_entry(temp_db_conn, "MX-DDD-0005", e2)
+    total_hours, progress = compute_rollup(temp_db_conn, "MX-DDD-0005")
+    assert total_hours == 7.5
+    assert progress == 65
+
+
+def test_pull_new_entries_excludes_known_ids(temp_db_conn):
+    e1 = BitacoraEntry(date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=False,
+                        entry_group_id="gid-1", avance_override=None, sections={"general": "a"})
+    push_entry(temp_db_conn, "MX-DDD-0005", e1)
+    pulled = pull_new_entries(temp_db_conn, "MX-DDD-0005", known_ids=set())
+    assert len(pulled) == 1
+    assert pulled[0].entry_group_id == "gid-1"
+    assert pulled[0].via_app is True
+
+    assert pull_new_entries(temp_db_conn, "MX-DDD-0005", known_ids={"gid-1"}) == []

@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from domain.services.seguimiento_operativo_service import OperationalTrackingService
 from infra.db.adapter import PLACEHOLDER, db_read_dataframe
 from infra.db.connection import get_sqlite_conn as get_conn
 from infra.feedback_survey_scheduler import register_feedback_survey
@@ -1517,50 +1518,41 @@ def _render_capture_tab(conn: sqlite3.Connection) -> None:
         elif effort_hours_input <= 0:
             st.error("Las horas invertidas son obligatorias y deben ser mayores a 0.")
         else:
-            entry_group_id = uuid.uuid4().hex
             progress_percent_value = int(progress_percent_input) if enable_progress_capture else None
             estimated_end_date_value = (
                 estimated_end_date_input.isoformat() if isinstance(estimated_end_date_input, date) else None
             )
-            notes_to_insert = []
-            for ntype, ntext in (
-                ("general", general),
-                ("proximo_paso", proximo_paso),
-                ("bloqueador", bloqueador),
-                ("riesgo", riesgo),
-            ):
-                if str(ntext).strip():
-                    notes_to_insert.append(
-                        {
-                            "project_id": selected_project.project_id,
-                            "note_type": ntype,
-                            "note_text": str(ntext).strip(),
-                            "author": author.strip(),
-                            "tags": "",
-                            "is_private": False,
-                            "entry_group_id": entry_group_id,
-                            "note_title": "",
-                            "progress_percent": progress_percent_value,
-                            "estimated_end_date": estimated_end_date_value,
-                            "effort_hours": effort_hours_input if ntype == "general" else None,
-                        }
-                    )
+            payload_4_textareas = {
+                "general": str(general).strip(),
+                "proximo_paso": str(proximo_paso).strip(),
+                "bloqueador": str(bloqueador).strip(),
+                "riesgo": str(riesgo).strip(),
+            }
 
-            if not notes_to_insert:
+            if not any(payload_4_textareas.values()):
                 st.warning(t("ops_no_content_to_save"))
             else:
                 try:
                     if loop_url_input.strip() != (selected_project.loop_url or "").strip():
                         upsert_project_loop_url(conn, selected_project.project_id, loop_url_input)
-                    inserted_ids = insert_notes_batch(conn, notes_to_insert)
+                    tracking_service = OperationalTrackingService(DB_PATH)
+                    tracking_service.ensure_schema()
+                    inserted_ids = tracking_service.add_update(
+                        selected_project.project_id,
+                        payload_4_textareas,
+                        author.strip(),
+                        "",
+                        note_title="",
+                        progress_percent=progress_percent_value,
+                        estimated_end_date=estimated_end_date_value,
+                        effort_hours=effort_hours_input,
+                    )
                     status_after: str | None = None
                     if str(selected_project.status or "").lower() in START_EXECUTION_STATUSES:
                         status_after = "executing"
                     if status_after:
                         update_project_status(conn, selected_project.project_id, status_after)
-                    st.success(
-                        f"{t('ops_update_saved')} {entry_group_id}. {t('ops_notes_inserted')}: {len(inserted_ids)}"
-                    )
+                    st.success(f"{t('ops_notes_inserted')}: {len(inserted_ids)}")
                     if status_after:
                         st.info(f"{t('ops_status_changed_to')} {label_status(status_after)}")
                     st.session_state[capture_saved_key] = True

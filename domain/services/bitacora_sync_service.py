@@ -163,7 +163,8 @@ class BitacoraDocument:
             j = date_idx + 1
             while j < len(self.lines) and not DATE_RE.match(self.lines[j]):
                 j += 1
-            self.lines[j:j] = [""] + block_lines
+            prefix = [] if (j > 0 and self.lines[j - 1].strip() == "") else [""]
+            self.lines[j:j] = prefix + block_lines + [""]
         else:
             first_h2 = next((i for i, line in enumerate(self.lines) if DATE_RE.match(line)), len(self.lines))
             new_block = [f"## {entry.date}", ""] + block_lines + [""]

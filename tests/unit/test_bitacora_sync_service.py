@@ -167,3 +167,17 @@ def test_append_pulled_entry_creates_new_date_at_top():
     doc.append_pulled_entry(pulled)
     text = doc.render()
     assert text.index("## 2026-08-14") < text.index("## 2026-08-13")
+
+
+def test_append_pulled_entry_multi_date_preserves_spacing():
+    doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n\n## 2026-08-13\n\n### Carlos — 2h\n\n**Qué se hizo**\n- b\n")
+    pulled = BitacoraEntry(
+        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
+        entry_group_id="gid-2", avance_override=None, sections={"general": "- c"},
+    )
+    doc.append_pulled_entry(pulled)
+    text = doc.render()
+    assert "\n\n\n" not in text
+    assert "### Luis Astudillo — 2h _(vía app)_" in text
+    assert text.index("Xiomara Monroy") < text.index("Luis Astudillo")
+    assert text.index("Luis Astudillo") < text.index("## 2026-08-13")

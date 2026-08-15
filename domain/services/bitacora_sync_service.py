@@ -170,6 +170,21 @@ class BitacoraDocument:
             new_block = [f"## {entry.date}", ""] + block_lines + [""]
             self.lines[first_h2:first_h2] = new_block
 
+    def set_rollup(self, date: str, total_hours: float, progress_percent: int | None) -> None:
+        for i, line in enumerate(self.lines):
+            m = DATE_RE.match(line)
+            if m and m.group(1) == date:
+                rollup_text = _format_rollup(total_hours, progress_percent)
+                j = i + 1
+                if j < len(self.lines) and self.lines[j].strip() == "":
+                    j += 1
+                if j < len(self.lines) and ROLLUP_RE.match(self.lines[j]):
+                    self.lines[j] = rollup_text
+                else:
+                    self.lines[i + 1:i + 1] = ["", rollup_text]
+                return
+        raise ValueError(f"No existe la fecha {date} en el documento")
+
 
 _SECTION_LABELS = (("Bloqueador", "bloqueador"), ("Riesgo", "riesgo"), ("Por dónde seguir", "proximo_paso"))
 
@@ -190,3 +205,8 @@ def render_entry_block(entry: BitacoraEntry) -> str:
             parts.append(entry.sections[note_type])
             parts.append("")
     return "\n".join(parts).rstrip() + "\n"
+
+
+def _format_rollup(total_hours: float, progress_percent: int | None) -> str:
+    avance_text = f"{progress_percent}%" if progress_percent is not None else "sin dato"
+    return f"_Acumulado del proyecto: {total_hours:g}h · Avance: {avance_text}_"

@@ -181,3 +181,37 @@ def test_append_pulled_entry_multi_date_preserves_spacing():
     assert "### Luis Astudillo — 2h _(vía app)_" in text
     assert text.index("Xiomara Monroy") < text.index("Luis Astudillo")
     assert text.index("Luis Astudillo") < text.index("## 2026-08-13")
+
+
+def test_set_rollup_inserts_new_line():
+    doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
+    doc.set_rollup("2026-08-14", 172.5, 65)
+    text = doc.render()
+    assert "_Acumulado del proyecto: 172.5h · Avance: 65%_" in text
+    assert text.index("Acumulado") < text.index("Xiomara Monroy")
+
+
+def test_set_rollup_replaces_existing_line():
+    text = (
+        "## 2026-08-14\n\n_Acumulado del proyecto: 100h · Avance: 50%_\n\n"
+        "### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n"
+    )
+    doc = BitacoraDocument(text)
+    doc.set_rollup("2026-08-14", 104.5, 55)
+    rendered = doc.render()
+    assert rendered.count("_Acumulado") == 1
+    assert "_Acumulado del proyecto: 104.5h · Avance: 55%_" in rendered
+
+
+def test_set_rollup_without_progress_shows_sin_dato():
+    doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
+    doc.set_rollup("2026-08-14", 4.0, None)
+    assert "_Acumulado del proyecto: 4h · Avance: sin dato_" in doc.render()
+
+
+def test_set_rollup_raises_for_unknown_date():
+    import pytest as _pytest
+
+    doc = BitacoraDocument("## 2026-08-13\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
+    with _pytest.raises(ValueError):
+        doc.set_rollup("2026-08-14", 4.0, None)

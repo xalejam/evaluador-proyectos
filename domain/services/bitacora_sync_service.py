@@ -1,7 +1,7 @@
 """Sincroniza bitacora.md del vault de Obsidian con project_notes en Supabase.
 
-Ver docs/superpowers/specs/2026-05-19-... en el vault de Obsidian
-(repo separado) para el diseño completo.
+Ver docs/superpowers/specs/2026-08-14-bitacora-supabase-sync-design.md en el
+vault de Obsidian (repo separado) para el diseño completo.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 DATE_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})\s*$")
 ROLLUP_RE = re.compile(r"^_Acumulado del proyecto: [\d.]+h · Avance: (?:\d+%|sin dato)_\s*$")
-AUTHOR_RE = re.compile(r"^### (.+?)(?: — ([\d.]+)h)?(?: _\(vía app\)_)?\s*$")
+AUTHOR_RE = re.compile(r"^### (.+?)(?: — (\d+(?:\.\d+)?)h)?(?: _\(vía app\)_)?\s*$")
 ENTRY_GROUP_RE = re.compile(r"^<!-- entry_group_id: (\S+) -->\s*$")
 AVANCE_OVERRIDE_RE = re.compile(r"\*\*Avance:\*\*\s*(\d+)%")
 SECTION_LABEL_RE = re.compile(r"^\*\*(Bloqueador|Riesgo|Por dónde seguir)\*\*\s*$")
@@ -64,6 +64,13 @@ def parse_bitacora_markdown(text: str) -> list[BitacoraEntry]:
                 i += 1
             body = "\n".join(lines[body_start:i])
             avance_match = AVANCE_OVERRIDE_RE.search(body)
+            if avance_match:
+                avance_value = int(avance_match.group(1))
+                if not 0 <= avance_value <= 100:
+                    raise ValueError(
+                        f"Avance fuera de rango (0-100): {avance_value}% en la entrada de "
+                        f"{author} del {current_date}"
+                    )
             entries.append(
                 BitacoraEntry(
                     date=current_date,
@@ -71,7 +78,7 @@ def parse_bitacora_markdown(text: str) -> list[BitacoraEntry]:
                     hours=hours,
                     via_app=via_app,
                     entry_group_id=entry_group_id,
-                    avance_override=int(avance_match.group(1)) if avance_match else None,
+                    avance_override=avance_value if avance_match else None,
                     sections=_split_sections(body),
                 )
             )
@@ -199,6 +206,9 @@ def render_entry_block(entry: BitacoraEntry) -> str:
     if entry.sections.get("general"):
         parts.append(entry.sections["general"])
         parts.append("")
+    if entry.avance_override is not None:
+        parts.append(f"**Avance:** {entry.avance_override}%")
+        parts.append("")
     for label, note_type in _SECTION_LABELS:
         if entry.sections.get(note_type):
             parts.append(f"**{label}**")
@@ -325,6 +335,8 @@ def pull_new_entries(conn, project_id: str, known_ids: set[str]) -> list[Bitacor
 
 from pathlib import Path  # noqa: E402
 
+from infra.db_migrations import get_project_members  # noqa: E402
+
 FRONTMATTER_PROJECT_ID_RE = re.compile(r"^project_id:\s*(\S+)\s*$", re.MULTILINE)
 
 
@@ -346,7 +358,14 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
 
     doc = BitacoraDocument(text)
     new_local_entries = doc.assign_missing_entry_group_ids(project_id)
-    for entry in new_local_entries:
+
+    # Fix 1: no confiar solo en los <!-- entry_group_id --> del archivo local
+    # (git checkout/reset, merge conflicts o clones viejos pueden perder ese
+    # comentario). Antes de insertar, verificar contra lo que ya existe en
+    # Supabase para evitar duplicar filas inmutables.
+    existing_supabase_ids = find_existing_entry_group_ids(conn, project_id)
+    entries_to_push = [e for e in new_local_entries if e.entry_group_id not in existing_supabase_ids]
+    for entry in entries_to_push:
         push_entry(conn, project_id, entry)
 
     known_ids = doc.known_entry_group_ids()
@@ -354,18 +373,30 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
     for entry in pulled_entries:
         doc.append_pulled_entry(entry)
 
-    touched_dates = {e.date for e in new_local_entries} | {e.date for e in pulled_entries}
+    touched_dates = {e.date for e in entries_to_push} | {e.date for e in pulled_entries}
     if touched_dates:
         total_hours, progress_percent = compute_rollup(conn, project_id)
-        for date in touched_dates:
-            doc.set_rollup(date, total_hours, progress_percent)
+        doc.set_rollup(max(touched_dates), total_hours, progress_percent)
+
+    # Fix 4: avisar de autores que no están dados de alta como miembro del
+    # proyecto (typos silenciosos que "Carga del equipo" nunca mostraría).
+    # Si el proyecto no tiene miembros registrados todavía no se avisa: es
+    # un hueco preexistente distinto al de este fix.
+    unknown_authors: list[str] = []
+    members = get_project_members(conn, project_id)
+    if members:
+        member_set = set(members)
+        unknown_authors = sorted(
+            {e.author for e in new_local_entries + pulled_entries if e.author not in member_set}
+        )
 
     if new_local_entries or pulled_entries:
         vault_path.write_text(doc.render(), encoding="utf-8")
 
     return {
-        "pushed": len(new_local_entries),
+        "pushed": len(entries_to_push),
         "pulled": len(pulled_entries),
         "skipped": False,
         "project_id": project_id,
+        "unknown_authors": unknown_authors,
     }

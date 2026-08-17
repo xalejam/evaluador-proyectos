@@ -307,7 +307,13 @@ def test_sync_bitacora_file_pushes_new_local_entry(tmp_path, temp_db_conn):
         encoding="utf-8",
     )
     result = sync_bitacora_file(temp_db_conn, bitacora)
-    assert result == {"pushed": 1, "pulled": 0, "skipped": False, "project_id": "MX-DDD-0005"}
+    assert result == {
+        "pushed": 1,
+        "pulled": 0,
+        "skipped": False,
+        "project_id": "MX-DDD-0005",
+        "unknown_authors": [],
+    }
 
     rows = temp_db_conn.execute("SELECT * FROM project_notes").fetchall()
     assert len(rows) == 1
@@ -343,3 +349,155 @@ def test_sync_bitacora_file_skips_project_not_in_supabase(tmp_path, temp_db_conn
     result = sync_bitacora_file(temp_db_conn, bitacora)
     assert result["skipped"] is True
     assert bitacora.read_text(encoding="utf-8") == original
+
+
+# --- Fix 1: idempotencia contra Supabase cuando se pierde el comentario local ---
+
+
+def test_sync_bitacora_file_does_not_duplicate_when_supabase_already_has_the_group_id(tmp_path, temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    gid = "MX-DDD-0005-2026-08-14-xiomara-monroy"
+    # Simula que la fila ya existe en Supabase (p.ej. de una corrida anterior
+    # cuyo <!-- entry_group_id --> local se perdió por un git checkout/merge).
+    push_entry(
+        temp_db_conn, "MX-DDD-0005",
+        BitacoraEntry(date="2026-08-14", author="Xiomara Monroy", hours=4.5, via_app=False,
+                       entry_group_id=gid, avance_override=None, sections={"general": "Ya existe en Supabase"}),
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text(
+        "---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n"
+        "## 2026-08-14\n\n### Xiomara Monroy — 4.5h\n\n**Qué se hizo**\n- comentario local perdido\n",
+        encoding="utf-8",
+    )
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result["pushed"] == 0
+
+    rows = temp_db_conn.execute(
+        "SELECT COUNT(*) AS n FROM project_notes WHERE entry_group_id = ?", (gid,)
+    ).fetchall()
+    count = rows[0]["n"] if isinstance(rows[0], dict) else rows[0][0]
+    assert count == 1
+
+    updated_text = bitacora.read_text(encoding="utf-8")
+    assert f"<!-- entry_group_id: {gid} -->" in updated_text
+
+
+# --- Fix 2: set_rollup solo se reescribe para la fecha más nueva tocada ---
+
+
+def test_sync_bitacora_file_only_rewrites_rollup_for_newest_touched_date(tmp_path, temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    # Entrada ya existente en Supabase con fecha 2026-08-14 (se "baja" al archivo).
+    push_entry(
+        temp_db_conn, "MX-DDD-0005",
+        BitacoraEntry(date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=False,
+                       entry_group_id="app-gid-1", avance_override=None, sections={"general": "Capturado en la app"}),
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text(
+        "---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n"
+        "## 2026-08-13\n\n_Acumulado del proyecto: 100h · Avance: 50%_\n\n"
+        "### Xiomara Monroy — 3h\n\n**Qué se hizo**\n- entrada previa del 2026-08-13\n",
+        encoding="utf-8",
+    )
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result["pushed"] == 1
+    assert result["pulled"] == 1
+
+    text = bitacora.read_text(encoding="utf-8")
+    # La entrada bajada tiene fecha 2026-08-14, que no existía en el archivo:
+    # append_pulled_entry crea esa sección nueva antes de las existentes.
+    date_14 = text.index("## 2026-08-14")
+    date_13 = text.index("## 2026-08-13")
+    assert date_14 < date_13
+    # La fecha más nueva (2026-08-14) sí tiene línea de acumulado nueva.
+    section_14 = text[date_14:date_13]
+    assert "_Acumulado del proyecto:" in section_14
+    # La fecha más antigua (2026-08-13) conserva su línea original sin cambios.
+    section_13 = text[date_13:]
+    assert "_Acumulado del proyecto: 100h · Avance: 50%_" in section_13
+
+
+# --- Fix 3a: **Avance:** fuera de 0-100 debe rechazarse ---
+
+
+def test_parse_bitacora_markdown_rejects_avance_out_of_range():
+    import pytest as _pytest
+
+    text = (
+        "## 2026-08-14\n\n### Xiomara Monroy — 2h\n\n"
+        "**Qué se hizo**\n- Avanzó demasiado.\n\n**Avance:** 250%\n"
+    )
+    with _pytest.raises(ValueError):
+        parse_bitacora_markdown(text)
+
+
+# --- Fix 3b: horas mal escritas no deben tumbar el parseo con float() ---
+
+
+def test_parse_bitacora_markdown_handles_malformed_hours_without_crashing():
+    text = "## 2026-08-14\n\n### Xiomara Monroy — 4.5.3h\n\n**Qué se hizo**\n- typo en las horas.\n"
+    entries = parse_bitacora_markdown(text)
+    assert len(entries) == 1
+    assert entries[0].author == "Xiomara Monroy — 4.5.3h"
+    assert entries[0].hours is None
+
+
+# --- Fix 4: aviso de autor no registrado en project_members ---
+
+
+def test_sync_bitacora_file_reports_unknown_authors(tmp_path, temp_db_conn):
+    from infra.db_migrations import add_project_member
+
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    add_project_member(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy")
+    add_project_member(temp_db_conn, "MX-DDD-0005", "Luis Astudillo")
+
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text(
+        "---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n"
+        "## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n\n"
+        "### Xiomara Monro — 2h\n\n**Qué se hizo**\n- typo en el nombre\n",
+        encoding="utf-8",
+    )
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result["unknown_authors"] == ["Xiomara Monro"]
+    assert result["pushed"] == 2
+
+    rows = temp_db_conn.execute("SELECT DISTINCT author FROM project_notes").fetchall()
+    authors = {r["author"] if isinstance(r, dict) else r[0] for r in rows}
+    assert authors == {"Xiomara Monroy", "Xiomara Monro"}
+
+
+def test_sync_bitacora_file_no_unknown_authors_when_no_members_registered(tmp_path, temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text(
+        "---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n"
+        "## 2026-08-14\n\n### Cualquiera — 1h\n\n**Qué se hizo**\n- a\n",
+        encoding="utf-8",
+    )
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+    assert result["unknown_authors"] == []
+
+
+# --- Fix 5: avance_override sobrevive el round-trip render -> parse ---
+
+
+def test_render_entry_block_round_trips_avance_override():
+    entry = BitacoraEntry(
+        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
+        entry_group_id="gid-1", avance_override=70, sections={"general": "- b"},
+    )
+    block = render_entry_block(entry)
+    assert "**Avance:** 70%" in block
+
+    text = "## 2026-08-14\n\n" + block
+    reparsed = parse_bitacora_markdown(text)
+    assert len(reparsed) == 1
+    assert reparsed[0].avance_override == 70

@@ -31,10 +31,16 @@ def main() -> int:
     conn = get_connection()
     total_pushed = total_pulled = 0
     skipped: list[str] = []
+    failed: list[str] = []
     try:
         for path in bitacora_files:
-            result = sync_bitacora_file(conn, path)
             rel = path.relative_to(vault_root)
+            try:
+                result = sync_bitacora_file(conn, path)
+            except Exception as e:
+                print(f"{rel}: ERROR - {e}")
+                failed.append(f"{rel}: {e}")
+                continue
             if result["skipped"]:
                 skipped.append(f"{rel} (project_id={result['project_id']!r} no existe en Supabase)")
                 continue
@@ -42,6 +48,8 @@ def main() -> int:
             total_pulled += result["pulled"]
             if result["pushed"] or result["pulled"]:
                 print(f"{rel}: +{result['pushed']} subidas, +{result['pulled']} bajadas")
+            if result.get("unknown_authors"):
+                print(f"  ⚠ autor(es) no registrados en project_members: {', '.join(result['unknown_authors'])}")
     finally:
         conn.close()
 
@@ -49,6 +57,10 @@ def main() -> int:
     if skipped:
         print(f"\n{len(skipped)} archivo(s) sin sincronizar (proyecto no dado de alta en Supabase):")
         for line in skipped:
+            print(f"  - {line}")
+    if failed:
+        print(f"\n{len(failed)} archivo(s) con error durante la sincronización:")
+        for line in failed:
             print(f"  - {line}")
     return 0
 

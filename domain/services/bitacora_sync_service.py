@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from pathlib import Path
+
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER
+from infra.db_migrations import get_project_members
 
 DATE_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})\s*$")
 ROLLUP_RE = re.compile(r"^_Acumulado del proyecto: [\d.]+h · Avance: (?:\d+%|sin dato)_\s*$")
@@ -163,7 +167,11 @@ class BitacoraDocument:
     def append_pulled_entry(self, entry: BitacoraEntry) -> None:
         block_lines = render_entry_block(entry).splitlines()
         date_idx = next(
-            (i for i, line in enumerate(self.lines) if DATE_RE.match(line) and DATE_RE.match(line).group(1) == entry.date),
+            (
+                i
+                for i, line in enumerate(self.lines)
+                if DATE_RE.match(line) and DATE_RE.match(line).group(1) == entry.date
+            ),
             None,
         )
         if date_idx is not None:
@@ -202,7 +210,7 @@ class BitacoraDocument:
                 if j < len(self.lines) and ROLLUP_RE.match(self.lines[j]):
                     self.lines[j] = rollup_text
                 else:
-                    self.lines[i + 1:i + 1] = ["", rollup_text]
+                    self.lines[i + 1 : i + 1] = ["", rollup_text]
                 return
         raise ValueError(f"No existe la fecha {date} en el documento")
 
@@ -234,9 +242,6 @@ def render_entry_block(entry: BitacoraEntry) -> str:
 def _format_rollup(total_hours: float, progress_percent: int | None) -> str:
     avance_text = f"{progress_percent}%" if progress_percent is not None else "sin dato"
     return f"_Acumulado del proyecto: {total_hours:g}h · Avance: {avance_text}_"
-
-
-from infra.db.adapter import IS_CLOUD, PLACEHOLDER  # noqa: E402
 
 
 def project_exists(conn, project_id: str) -> bool:
@@ -273,9 +278,18 @@ def push_entry(conn, project_id: str, entry: BitacoraEntry) -> int:
             VALUES ({', '.join([PLACEHOLDER] * 12)})
             """,
             (
-                project_id, text, note_type, entry.author, "", 0,
-                entry.entry_group_id, "", entry.avance_override, None,
-                effort_hours, created_at,
+                project_id,
+                text,
+                note_type,
+                entry.author,
+                "",
+                0,
+                entry.entry_group_id,
+                "",
+                entry.avance_override,
+                None,
+                effort_hours,
+                created_at,
             ),
         )
         inserted += 1
@@ -347,10 +361,6 @@ def pull_new_entries(conn, project_id: str, known_ids: set[str]) -> list[Bitacor
     return entries
 
 
-from pathlib import Path  # noqa: E402
-
-from infra.db_migrations import get_project_members  # noqa: E402
-
 FRONTMATTER_PROJECT_ID_RE = re.compile(r"^project_id:\s*(\S+)\s*$", re.MULTILINE)
 
 
@@ -400,9 +410,7 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
     members = get_project_members(conn, project_id)
     if members:
         member_set = set(members)
-        unknown_authors = sorted(
-            {e.author for e in new_local_entries + pulled_entries if e.author not in member_set}
-        )
+        unknown_authors = sorted({e.author for e in new_local_entries + pulled_entries if e.author not in member_set})
 
     if new_local_entries or pulled_entries:
         vault_path.write_text(doc.render(), encoding="utf-8")

@@ -1,4 +1,18 @@
-from domain.services.bitacora_sync_service import BitacoraEntry, parse_bitacora_markdown
+from domain.services.bitacora_sync_service import (
+    BitacoraDocument,
+    BitacoraEntry,
+    build_entry_group_id,
+    compute_rollup,
+    find_existing_entry_group_ids,
+    parse_bitacora_markdown,
+    project_exists,
+    pull_new_entries,
+    push_entry,
+    read_frontmatter_project_id,
+    render_entry_block,
+    slugify_author,
+    sync_bitacora_file,
+)
 
 
 def test_parses_single_entry_with_all_fields():
@@ -41,10 +55,7 @@ def test_parses_entry_without_hours_or_entry_group_id():
 
 
 def test_parses_avance_override():
-    text = (
-        "## 2026-08-14\n\n### Xiomara Monroy — 2h\n\n"
-        "**Qué se hizo**\n- Avanzó bastante.\n\n**Avance:** 70%\n"
-    )
+    text = "## 2026-08-14\n\n### Xiomara Monroy — 2h\n\n" "**Qué se hizo**\n- Avanzó bastante.\n\n**Avance:** 70%\n"
     entries = parse_bitacora_markdown(text)
     assert entries[0].avance_override == 70
 
@@ -73,13 +84,6 @@ def test_no_entries_returns_empty_list():
     assert parse_bitacora_markdown("# Bitácora\n\nSin entradas todavía.\n") == []
 
 
-from domain.services.bitacora_sync_service import (
-    BitacoraDocument,
-    build_entry_group_id,
-    slugify_author,
-)
-
-
 def test_slugify_author_strips_accents_and_spaces():
     assert slugify_author("Xiomara Monroy") == "xiomara-monroy"
     assert slugify_author("Luis Astudillo") == "luis-astudillo"
@@ -100,10 +104,7 @@ def test_assigns_id_to_entry_missing_one():
 
 
 def test_does_not_reassign_existing_id():
-    text = (
-        "## 2026-08-14\n\n### Xiomara Monroy — 4h\n"
-        "<!-- entry_group_id: custom-id -->\n\n**Qué se hizo**\n- a\n"
-    )
+    text = "## 2026-08-14\n\n### Xiomara Monroy — 4h\n" "<!-- entry_group_id: custom-id -->\n\n**Qué se hizo**\n- a\n"
     doc = BitacoraDocument(text)
     new_entries = doc.assign_missing_entry_group_ids("MX-DDD-0005")
     assert new_entries == []
@@ -124,13 +125,15 @@ def test_disambiguates_two_entries_same_author_same_day():
     ]
 
 
-from domain.services.bitacora_sync_service import render_entry_block
-
-
 def test_render_entry_block_includes_hours_and_via_app_marker():
     entry = BitacoraEntry(
-        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
-        entry_group_id="gid-1", avance_override=None, sections={"general": "- b"},
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=True,
+        entry_group_id="gid-1",
+        avance_override=None,
+        sections={"general": "- b"},
     )
     block = render_entry_block(entry)
     assert block.startswith("### Luis Astudillo — 2h _(vía app)_\n")
@@ -140,8 +143,13 @@ def test_render_entry_block_includes_hours_and_via_app_marker():
 
 def test_render_entry_block_omits_hours_when_none():
     entry = BitacoraEntry(
-        date="2026-08-14", author="Luis Astudillo", hours=None, via_app=False,
-        entry_group_id="gid-1", avance_override=None, sections={"general": "- b"},
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=None,
+        via_app=False,
+        entry_group_id="gid-1",
+        avance_override=None,
+        sections={"general": "- b"},
     )
     assert render_entry_block(entry).startswith("### Luis Astudillo\n")
 
@@ -149,8 +157,13 @@ def test_render_entry_block_omits_hours_when_none():
 def test_append_pulled_entry_to_existing_date():
     doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
     pulled = BitacoraEntry(
-        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
-        entry_group_id="gid-2", avance_override=None, sections={"general": "- b"},
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=True,
+        entry_group_id="gid-2",
+        avance_override=None,
+        sections={"general": "- b"},
     )
     doc.append_pulled_entry(pulled)
     text = doc.render()
@@ -161,8 +174,13 @@ def test_append_pulled_entry_to_existing_date():
 def test_append_pulled_entry_creates_new_date_at_top():
     doc = BitacoraDocument("## 2026-08-13\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
     pulled = BitacoraEntry(
-        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
-        entry_group_id="gid-2", avance_override=None, sections={"general": "- b"},
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=True,
+        entry_group_id="gid-2",
+        avance_override=None,
+        sections={"general": "- b"},
     )
     doc.append_pulled_entry(pulled)
     text = doc.render()
@@ -172,8 +190,13 @@ def test_append_pulled_entry_creates_new_date_at_top():
 def test_append_pulled_entry_older_date_goes_after_existing_newer_dates():
     doc = BitacoraDocument("## 2026-08-13\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n")
     pulled = BitacoraEntry(
-        date="2026-07-01", author="Luis Astudillo", hours=2.0, via_app=True,
-        entry_group_id="gid-old", avance_override=None, sections={"general": "- vieja"},
+        date="2026-07-01",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=True,
+        entry_group_id="gid-old",
+        avance_override=None,
+        sections={"general": "- vieja"},
     )
     doc.append_pulled_entry(pulled)
     text = doc.render()
@@ -186,8 +209,13 @@ def test_append_pulled_entry_inserts_between_existing_dates():
         "## 2026-07-17\n\n### X — 1h\n\n**Qué se hizo**\n- b\n"
     )
     pulled = BitacoraEntry(
-        date="2026-07-29", author="Y", hours=1.0, via_app=True,
-        entry_group_id="gid-mid", avance_override=None, sections={"general": "- c"},
+        date="2026-07-29",
+        author="Y",
+        hours=1.0,
+        via_app=True,
+        entry_group_id="gid-mid",
+        avance_override=None,
+        sections={"general": "- c"},
     )
     doc.append_pulled_entry(pulled)
     text = doc.render()
@@ -195,10 +223,17 @@ def test_append_pulled_entry_inserts_between_existing_dates():
 
 
 def test_append_pulled_entry_multi_date_preserves_spacing():
-    doc = BitacoraDocument("## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n\n## 2026-08-13\n\n### Carlos — 2h\n\n**Qué se hizo**\n- b\n")
+    doc = BitacoraDocument(
+        "## 2026-08-14\n\n### Xiomara Monroy — 4h\n\n**Qué se hizo**\n- a\n\n## 2026-08-13\n\n### Carlos — 2h\n\n**Qué se hizo**\n- b\n"
+    )
     pulled = BitacoraEntry(
-        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
-        entry_group_id="gid-2", avance_override=None, sections={"general": "- c"},
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=True,
+        entry_group_id="gid-2",
+        avance_override=None,
+        sections={"general": "- c"},
     )
     doc.append_pulled_entry(pulled)
     text = doc.render()
@@ -242,15 +277,6 @@ def test_set_rollup_raises_for_unknown_date():
         doc.set_rollup("2026-08-14", 4.0, None)
 
 
-from domain.services.bitacora_sync_service import (
-    compute_rollup,
-    find_existing_entry_group_ids,
-    project_exists,
-    pull_new_entries,
-    push_entry,
-)
-
-
 def test_project_exists_true_and_false(temp_db_conn):
     temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
     temp_db_conn.commit()
@@ -260,8 +286,12 @@ def test_project_exists_true_and_false(temp_db_conn):
 
 def test_push_entry_inserts_one_row_per_section_with_hours_only_on_general(temp_db_conn):
     entry = BitacoraEntry(
-        date="2026-08-14", author="Xiomara Monroy", hours=4.5, via_app=False,
-        entry_group_id="MX-DDD-0005-2026-08-14-xiomara-monroy", avance_override=65,
+        date="2026-08-14",
+        author="Xiomara Monroy",
+        hours=4.5,
+        via_app=False,
+        entry_group_id="MX-DDD-0005-2026-08-14-xiomara-monroy",
+        avance_override=65,
         sections={"general": "Se hizo x", "bloqueador": "Falta y"},
     )
     inserted = push_entry(temp_db_conn, "MX-DDD-0005", entry)
@@ -277,18 +307,37 @@ def test_push_entry_inserts_one_row_per_section_with_hours_only_on_general(temp_
 
 def test_find_existing_entry_group_ids(temp_db_conn):
     entry = BitacoraEntry(
-        date="2026-08-14", author="X", hours=1.0, via_app=False,
-        entry_group_id="gid-1", avance_override=None, sections={"general": "x"},
+        date="2026-08-14",
+        author="X",
+        hours=1.0,
+        via_app=False,
+        entry_group_id="gid-1",
+        avance_override=None,
+        sections={"general": "x"},
     )
     push_entry(temp_db_conn, "MX-DDD-0005", entry)
     assert find_existing_entry_group_ids(temp_db_conn, "MX-DDD-0005") == {"gid-1"}
 
 
 def test_compute_rollup_sums_hours_and_gets_latest_progress(temp_db_conn):
-    e1 = BitacoraEntry(date="2026-08-13", author="X", hours=3.0, via_app=False,
-                        entry_group_id="gid-1", avance_override=50, sections={"general": "a"})
-    e2 = BitacoraEntry(date="2026-08-14", author="X", hours=4.5, via_app=False,
-                        entry_group_id="gid-2", avance_override=65, sections={"general": "b"})
+    e1 = BitacoraEntry(
+        date="2026-08-13",
+        author="X",
+        hours=3.0,
+        via_app=False,
+        entry_group_id="gid-1",
+        avance_override=50,
+        sections={"general": "a"},
+    )
+    e2 = BitacoraEntry(
+        date="2026-08-14",
+        author="X",
+        hours=4.5,
+        via_app=False,
+        entry_group_id="gid-2",
+        avance_override=65,
+        sections={"general": "b"},
+    )
     push_entry(temp_db_conn, "MX-DDD-0005", e1)
     push_entry(temp_db_conn, "MX-DDD-0005", e2)
     total_hours, progress = compute_rollup(temp_db_conn, "MX-DDD-0005")
@@ -297,8 +346,15 @@ def test_compute_rollup_sums_hours_and_gets_latest_progress(temp_db_conn):
 
 
 def test_pull_new_entries_excludes_known_ids(temp_db_conn):
-    e1 = BitacoraEntry(date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=False,
-                        entry_group_id="gid-1", avance_override=None, sections={"general": "a"})
+    e1 = BitacoraEntry(
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=False,
+        entry_group_id="gid-1",
+        avance_override=None,
+        sections={"general": "a"},
+    )
     push_entry(temp_db_conn, "MX-DDD-0005", e1)
     pulled = pull_new_entries(temp_db_conn, "MX-DDD-0005", known_ids=set())
     assert len(pulled) == 1
@@ -306,11 +362,6 @@ def test_pull_new_entries_excludes_known_ids(temp_db_conn):
     assert pulled[0].via_app is True
 
     assert pull_new_entries(temp_db_conn, "MX-DDD-0005", known_ids={"gid-1"}) == []
-
-
-from pathlib import Path
-
-from domain.services.bitacora_sync_service import read_frontmatter_project_id, sync_bitacora_file
 
 
 def test_read_frontmatter_project_id():
@@ -351,9 +402,17 @@ def test_sync_bitacora_file_pulls_app_entry(tmp_path, temp_db_conn):
     temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
     temp_db_conn.commit()
     push_entry(
-        temp_db_conn, "MX-DDD-0005",
-        BitacoraEntry(date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=False,
-                       entry_group_id="app-gid-1", avance_override=70, sections={"general": "Capturado en la app"}),
+        temp_db_conn,
+        "MX-DDD-0005",
+        BitacoraEntry(
+            date="2026-08-14",
+            author="Luis Astudillo",
+            hours=2.0,
+            via_app=False,
+            entry_group_id="app-gid-1",
+            avance_override=70,
+            sections={"general": "Capturado en la app"},
+        ),
     )
     bitacora = tmp_path / "bitacora.md"
     bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
@@ -386,9 +445,17 @@ def test_sync_bitacora_file_does_not_duplicate_when_supabase_already_has_the_gro
     # Simula que la fila ya existe en Supabase (p.ej. de una corrida anterior
     # cuyo <!-- entry_group_id --> local se perdió por un git checkout/merge).
     push_entry(
-        temp_db_conn, "MX-DDD-0005",
-        BitacoraEntry(date="2026-08-14", author="Xiomara Monroy", hours=4.5, via_app=False,
-                       entry_group_id=gid, avance_override=None, sections={"general": "Ya existe en Supabase"}),
+        temp_db_conn,
+        "MX-DDD-0005",
+        BitacoraEntry(
+            date="2026-08-14",
+            author="Xiomara Monroy",
+            hours=4.5,
+            via_app=False,
+            entry_group_id=gid,
+            avance_override=None,
+            sections={"general": "Ya existe en Supabase"},
+        ),
     )
     bitacora = tmp_path / "bitacora.md"
     bitacora.write_text(
@@ -399,9 +466,7 @@ def test_sync_bitacora_file_does_not_duplicate_when_supabase_already_has_the_gro
     result = sync_bitacora_file(temp_db_conn, bitacora)
     assert result["pushed"] == 0
 
-    rows = temp_db_conn.execute(
-        "SELECT COUNT(*) AS n FROM project_notes WHERE entry_group_id = ?", (gid,)
-    ).fetchall()
+    rows = temp_db_conn.execute("SELECT COUNT(*) AS n FROM project_notes WHERE entry_group_id = ?", (gid,)).fetchall()
     count = rows[0]["n"] if isinstance(rows[0], dict) else rows[0][0]
     assert count == 1
 
@@ -417,9 +482,17 @@ def test_sync_bitacora_file_only_rewrites_rollup_for_newest_touched_date(tmp_pat
     temp_db_conn.commit()
     # Entrada ya existente en Supabase con fecha 2026-08-14 (se "baja" al archivo).
     push_entry(
-        temp_db_conn, "MX-DDD-0005",
-        BitacoraEntry(date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=False,
-                       entry_group_id="app-gid-1", avance_override=None, sections={"general": "Capturado en la app"}),
+        temp_db_conn,
+        "MX-DDD-0005",
+        BitacoraEntry(
+            date="2026-08-14",
+            author="Luis Astudillo",
+            hours=2.0,
+            via_app=False,
+            entry_group_id="app-gid-1",
+            avance_override=None,
+            sections={"general": "Capturado en la app"},
+        ),
     )
     bitacora = tmp_path / "bitacora.md"
     bitacora.write_text(
@@ -452,10 +525,7 @@ def test_sync_bitacora_file_only_rewrites_rollup_for_newest_touched_date(tmp_pat
 def test_parse_bitacora_markdown_rejects_avance_out_of_range():
     import pytest as _pytest
 
-    text = (
-        "## 2026-08-14\n\n### Xiomara Monroy — 2h\n\n"
-        "**Qué se hizo**\n- Avanzó demasiado.\n\n**Avance:** 250%\n"
-    )
+    text = "## 2026-08-14\n\n### Xiomara Monroy — 2h\n\n" "**Qué se hizo**\n- Avanzó demasiado.\n\n**Avance:** 250%\n"
     with _pytest.raises(ValueError):
         parse_bitacora_markdown(text)
 
@@ -516,8 +586,13 @@ def test_sync_bitacora_file_no_unknown_authors_when_no_members_registered(tmp_pa
 
 def test_render_entry_block_round_trips_avance_override():
     entry = BitacoraEntry(
-        date="2026-08-14", author="Luis Astudillo", hours=2.0, via_app=True,
-        entry_group_id="gid-1", avance_override=70, sections={"general": "- b"},
+        date="2026-08-14",
+        author="Luis Astudillo",
+        hours=2.0,
+        via_app=True,
+        entry_group_id="gid-1",
+        avance_override=70,
+        sections={"general": "- b"},
     )
     block = render_entry_block(entry)
     assert "**Avance:** 70%" in block

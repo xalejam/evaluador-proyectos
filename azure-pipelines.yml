@@ -38,6 +38,10 @@ steps:
     displayName: "Lint and format checks"
 
   - script: |
+      pre-commit run --all-files detect-secrets
+    displayName: "Secret scan (red de seguridad para quien no tenga el hook local instalado)"
+
+  - script: |
       python - <<'PY'
       from pathlib import Path
       import py_compile

@@ -2,3 +2,5 @@
 ruff
 pytest
 PyYAML
+pre-commit
+detect-secrets

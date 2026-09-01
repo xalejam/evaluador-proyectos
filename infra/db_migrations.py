@@ -188,8 +188,7 @@ def ensure_tracking_schema(conn) -> None:
     if IS_CLOUD:
         return
 
-    conn.execute(
-        """
+    conn.execute("""
         CREATE TABLE IF NOT EXISTS tracking (
             id TEXT PRIMARY KEY,
             project_id TEXT,
@@ -208,8 +207,7 @@ def ensure_tracking_schema(conn) -> None:
             actual_monthly_savings REAL,
             actual_annual_savings REAL
         )
-        """
-    )
+        """)
 
     _add_column_if_missing(conn, "tracking", "survey_time_saved_percent REAL")
     _add_column_if_missing(conn, "tracking", "usage_frequency TEXT")

@@ -26,7 +26,7 @@ def auto_process_feedback():
         # Verificar que se puede leer el archivo
         try:
             df = pd.read_excel(feedback_file)
-            df.columns = [col.strip().replace('\xa0', ' ') for col in df.columns]
+            df.columns = [col.strip().replace("\xa0", " ") for col in df.columns]
         except Exception as e:
             return None, f"{t('tracking_feedback_read_error')} {feedback_file}: {str(e)}"
 

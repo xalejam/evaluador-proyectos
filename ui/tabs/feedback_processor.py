@@ -87,7 +87,7 @@ class FeedbackProcessor:
                 df = pd.read_excel(file_path_or_buffer)
 
             # Normalizar nombres de columna: quitar espacios y non-breaking spaces (\xa0)
-            df.columns = [col.strip().replace('\xa0', ' ') for col in df.columns]
+            df.columns = [col.strip().replace("\xa0", " ") for col in df.columns]
 
             return df
         except Exception as e:
@@ -103,7 +103,9 @@ class FeedbackProcessor:
         required_fields = ["project_id", "satisfaction", "usage_frequency", "time_saved_percent", "nps_score"]
         resolved_required = {field: self._pick_column(df, field, required=True) for field in required_fields}
 
-        missing_columns = [resolved_required[field] for field in required_fields if resolved_required[field] not in df.columns]
+        missing_columns = [
+            resolved_required[field] for field in required_fields if resolved_required[field] not in df.columns
+        ]
         if missing_columns:
             st.error(f"{t('feedback_missing_columns')}: {missing_columns}")
             return None

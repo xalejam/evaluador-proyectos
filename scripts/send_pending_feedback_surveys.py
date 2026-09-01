@@ -11,7 +11,6 @@ if str(REPO_ROOT) not in sys.path:
 
 from infra.feedback_survey_scheduler import send_pending_feedback_surveys
 
-
 if __name__ == "__main__":
     sent_count = send_pending_feedback_surveys()
     print(f"Sent pending feedback surveys: {sent_count}")

@@ -295,12 +295,7 @@ def render_dashboard():
 
                 col_fb_chart1, col_fb_chart2 = st.columns(2)
                 with col_fb_chart1:
-                    frequency_series = (
-                        feedback_df["usage_frequency"]
-                        .fillna("")
-                        .astype(str)
-                        .str.strip()
-                    )
+                    frequency_series = feedback_df["usage_frequency"].fillna("").astype(str).str.strip()
                     frequency_series = frequency_series[frequency_series != ""]
                     if not frequency_series.empty:
                         freq_counts = frequency_series.value_counts()

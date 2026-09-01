@@ -88,7 +88,16 @@ def _parse_send_at(value) -> datetime | None:
     return None
 
 
-def _send_smtp_email(smtp_host: str, smtp_port: int, smtp_user: str, smtp_password: str, from_email: str, to_emails: list[str], subject: str, body: str) -> None:
+def _send_smtp_email(
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str,
+    smtp_password: str,
+    from_email: str,
+    to_emails: list[str],
+    subject: str,
+    body: str,
+) -> None:
     message = MIMEMultipart()
     message["From"] = from_email
     message["To"] = ", ".join(to_emails)
@@ -148,7 +157,11 @@ def send_pending_feedback_surveys(
             if send_at is not None and send_at > now:
                 continue
 
-            recipients = [item.strip() for item in (row["recipients"] if isinstance(row, dict) else row[3]).split(",") if item.strip()]
+            recipients = [
+                item.strip()
+                for item in (row["recipients"] if isinstance(row, dict) else row[3]).split(",")
+                if item.strip()
+            ]
             if not recipients:
                 raise ValueError("No recipients configured")
 
@@ -188,6 +201,8 @@ def send_pending_feedback_surveys(
                     ("failed", str(exc), row["id"] if isinstance(row, dict) else row[0]),
                 )
                 update_conn.commit()
-            _append_log(f"Failed to send survey for project {row['project_id'] if isinstance(row, dict) else row[1]}: {exc}")
+            _append_log(
+                f"Failed to send survey for project {row['project_id'] if isinstance(row, dict) else row[1]}: {exc}"
+            )
 
     return sent_count

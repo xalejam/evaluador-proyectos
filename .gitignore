@@ -36,3 +36,9 @@ projects.backup_*.json
 .claude/settings.local.json
 # System prompts locales
 system_prompt_*.md
+
+# Worktrees sueltos de sesiones de Claude Code
+.claude/worktrees/
+
+# Logs en runtime
+logs/

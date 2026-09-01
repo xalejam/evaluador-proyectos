@@ -173,9 +173,23 @@ class BitacoraDocument:
             prefix = [] if (j > 0 and self.lines[j - 1].strip() == "") else [""]
             self.lines[j:j] = prefix + block_lines + [""]
         else:
-            first_h2 = next((i for i, line in enumerate(self.lines) if DATE_RE.match(line)), len(self.lines))
+            # No existe un H2 para esta fecha: insertarlo en la posicion
+            # cronologica correcta (mas reciente arriba), no siempre antes
+            # del primer H2 del documento — de lo contrario una fecha vieja
+            # que llega por pull queda por encima de fechas mas nuevas ya
+            # presentes en el archivo.
+            insert_at = next(
+                (
+                    i
+                    for i, line in enumerate(self.lines)
+                    if DATE_RE.match(line) and DATE_RE.match(line).group(1) < entry.date
+                ),
+                len(self.lines),
+            )
             new_block = [f"## {entry.date}", ""] + block_lines + [""]
-            self.lines[first_h2:first_h2] = new_block
+            if insert_at == len(self.lines) and self.lines and self.lines[-1].strip() != "":
+                new_block = [""] + new_block
+            self.lines[insert_at:insert_at] = new_block
 
     def set_rollup(self, date: str, total_hours: float, progress_percent: int | None) -> None:
         for i, line in enumerate(self.lines):

@@ -12,7 +12,6 @@ if "streamlit" not in sys.modules:
 
 from ui.tabs.feedback_processor import FeedbackProcessor
 
-
 PROJECT_COL_ALIAS = "ID DEL PROYECTO a evaluar"
 SATISFACTION_COL = "¿Qué tan satisfecho/a estás con la nueva herramienta?"
 FREQUENCY_COL = "¿Con qué frecuencia utilizas esta herramienta?"

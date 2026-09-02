@@ -29,7 +29,7 @@ def main() -> int:
         return 1
 
     conn = get_connection()
-    total_pushed = total_pulled = 0
+    total_pushed = total_pulled = total_estados = total_miembros = 0
     skipped: list[str] = []
     failed: list[str] = []
     try:
@@ -50,10 +50,22 @@ def main() -> int:
                 print(f"{rel}: +{result['pushed']} subidas, +{result['pulled']} bajadas")
             if result.get("unknown_authors"):
                 print(f"  ⚠ autor(es) no registrados en project_members: {', '.join(result['unknown_authors'])}")
+            estado_change = result.get("estado_change")
+            if estado_change:
+                total_estados += 1
+                print(f"  estado: {estado_change['anterior']}→{estado_change['nuevo']} actualizado")
+            if result.get("responsable_agregado"):
+                total_miembros += 1
+                print(f"  {result['responsable_agregado']} agregado a project_members")
+            if result.get("metadata_warning"):
+                print(f"  ⚠ {result['metadata_warning']}")
     finally:
         conn.close()
 
-    print(f"\nTotal: {total_pushed} subidas, {total_pulled} bajadas.")
+    print(
+        f"\nTotal: {total_pushed} subidas, {total_pulled} bajadas, "
+        f"{total_estados} estado(s) actualizado(s), {total_miembros} miembro(s) agregado(s)."
+    )
     if skipped:
         print(f"\n{len(skipped)} archivo(s) sin sincronizar (proyecto no dado de alta en Supabase):")
         for line in skipped:

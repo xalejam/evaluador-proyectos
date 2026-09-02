@@ -10,8 +10,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from infra.db.adapter import IS_CLOUD, PLACEHOLDER, db_now
-from infra.db_migrations import add_project_member, get_project_members
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER
+from infra.db_migrations import add_project_member, get_project_members, update_project_status
 
 DATE_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})\s*$")
 ROLLUP_RE = re.compile(r"^_Acumulado del proyecto: [\d.]+h · Avance: (?:\d+%|sin dato)_\s*$")
@@ -26,6 +26,17 @@ NOTE_TYPE_BY_LABEL = {
     "Por dónde seguir": "proximo_paso",
 }
 NOTE_TYPES_IN_ORDER = ("general", "proximo_paso", "bloqueador", "riesgo")
+
+VALID_ESTADOS = {
+    "evaluated",
+    "backlog",
+    "approved",
+    "executing",
+    "implemented",
+    "on_hold",
+    "rejected",
+    "handed_off",
+}
 
 
 @dataclass
@@ -262,11 +273,7 @@ def push_estado(conn, project_id: str, estado: str) -> dict[str, str] | None:
     current = get_project_status(conn, project_id)
     if current == estado:
         return None
-    conn.execute(
-        f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = {PLACEHOLDER} WHERE project_id = {PLACEHOLDER}",
-        (estado, db_now(), project_id),
-    )
-    conn.commit()
+    update_project_status(conn, project_id, estado)
     return {"anterior": current, "nuevo": estado}
 
 
@@ -479,7 +486,13 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
         else:
             estado = read_frontmatter_estado(index_text)
             if estado:
-                estado_change = push_estado(conn, project_id, estado)
+                if estado not in VALID_ESTADOS:
+                    metadata_warning = (
+                        f"estado={estado!r} en index.md no es un valor válido "
+                        f"({', '.join(sorted(VALID_ESTADOS))}); no se sincronizó"
+                    )
+                else:
+                    estado_change = push_estado(conn, project_id, estado)
             responsable = read_frontmatter_responsable(index_text)
             if responsable:
                 responsable_agregado = push_responsable(conn, project_id, responsable)

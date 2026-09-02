@@ -652,6 +652,19 @@ def test_push_estado_noop_when_same(temp_db_conn):
     assert push_estado(temp_db_conn, "MX-DDD-0005", "executing") is None
 
 
+def test_push_estado_sets_closed_at_when_transitioning_to_implemented(temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
+    )
+    temp_db_conn.commit()
+    push_estado(temp_db_conn, "MX-DDD-0005", "implemented")
+    row = temp_db_conn.execute(
+        "SELECT closed_at FROM projects WHERE project_id = ?", ("MX-DDD-0005",)
+    ).fetchone()
+    closed_at = row["closed_at"] if isinstance(row, dict) else row[0]
+    assert closed_at is not None
+
+
 def test_push_responsable_adds_when_missing(temp_db_conn):
     temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
     temp_db_conn.commit()
@@ -731,3 +744,39 @@ def test_sync_bitacora_file_warns_when_index_project_id_mismatches(tmp_path, tem
     assert result["responsable_agregado"] is None
     assert "distinto al de bitacora.md" in result["metadata_warning"]
     assert get_project_status(temp_db_conn, "MX-DDD-0005") == "approved"
+
+
+def test_sync_bitacora_file_warns_on_invalid_estado_and_does_not_write(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
+    )
+    temp_db_conn.commit()
+    (tmp_path / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: ejecutando\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+
+    assert result["estado_change"] is None
+    assert "ejecutando" in result["metadata_warning"]
+    assert get_project_status(temp_db_conn, "MX-DDD-0005") == "approved"
+
+
+def test_sync_bitacora_file_invalid_estado_does_not_block_responsable_push(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
+    )
+    temp_db_conn.commit()
+    (tmp_path / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: ejecutando\nresponsable: Xiomara Monroy\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+
+    assert result["responsable_agregado"] == "Xiomara Monroy"

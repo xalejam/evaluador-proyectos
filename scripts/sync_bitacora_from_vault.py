@@ -46,11 +46,19 @@ def main() -> int:
                 continue
             total_pushed += result["pushed"]
             total_pulled += result["pulled"]
-            if result["pushed"] or result["pulled"]:
+            estado_change = result.get("estado_change")
+            has_output = (
+                result["pushed"]
+                or result["pulled"]
+                or result.get("unknown_authors")
+                or estado_change
+                or result.get("responsable_agregado")
+                or result.get("metadata_warning")
+            )
+            if has_output:
                 print(f"{rel}: +{result['pushed']} subidas, +{result['pulled']} bajadas")
             if result.get("unknown_authors"):
                 print(f"  ⚠ autor(es) no registrados en project_members: {', '.join(result['unknown_authors'])}")
-            estado_change = result.get("estado_change")
             if estado_change:
                 total_estados += 1
                 print(f"  estado: {estado_change['anterior']}→{estado_change['nuevo']} actualizado")

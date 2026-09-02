@@ -10,8 +10,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from infra.db.adapter import IS_CLOUD, PLACEHOLDER
-from infra.db_migrations import get_project_members
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER, db_now
+from infra.db_migrations import add_project_member, get_project_members
 
 DATE_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})\s*$")
 ROLLUP_RE = re.compile(r"^_Acumulado del proyecto: [\d.]+h · Avance: (?:\d+%|sin dato)_\s*$")
@@ -247,6 +247,36 @@ def _format_rollup(total_hours: float, progress_percent: int | None) -> str:
 def project_exists(conn, project_id: str) -> bool:
     row = conn.execute(f"SELECT 1 FROM projects WHERE project_id = {PLACEHOLDER}", (project_id,)).fetchone()
     return row is not None
+
+
+def get_project_status(conn, project_id: str) -> str | None:
+    row = conn.execute(f"SELECT status FROM projects WHERE project_id = {PLACEHOLDER}", (project_id,)).fetchone()
+    if row is None:
+        return None
+    return row["status"] if isinstance(row, dict) else row[0]
+
+
+def push_estado(conn, project_id: str, estado: str) -> dict[str, str] | None:
+    """Actualiza projects.status si difiere del estado del vault (el vault gana).
+    Devuelve {'anterior': ..., 'nuevo': estado} si escribió, None si ya coincidía."""
+    current = get_project_status(conn, project_id)
+    if current == estado:
+        return None
+    conn.execute(
+        f"UPDATE projects SET status = {PLACEHOLDER}, updated_at = {PLACEHOLDER} WHERE project_id = {PLACEHOLDER}",
+        (estado, db_now(), project_id),
+    )
+    conn.commit()
+    return {"anterior": current, "nuevo": estado}
+
+
+def push_responsable(conn, project_id: str, responsable: str) -> str | None:
+    """Agrega el responsable del vault a project_members si todavía no está.
+    Devuelve el nombre si lo agregó, None si ya era miembro."""
+    if responsable in get_project_members(conn, project_id):
+        return None
+    add_project_member(conn, project_id, responsable)
+    return responsable
 
 
 def find_existing_entry_group_ids(conn, project_id: str) -> set[str]:

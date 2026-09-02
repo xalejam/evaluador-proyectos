@@ -4,10 +4,13 @@ from domain.services.bitacora_sync_service import (
     build_entry_group_id,
     compute_rollup,
     find_existing_entry_group_ids,
+    get_project_status,
     parse_bitacora_markdown,
     project_exists,
     pull_new_entries,
+    push_estado,
     push_entry,
+    push_responsable,
     read_frontmatter_estado,
     read_frontmatter_project_id,
     read_frontmatter_responsable,
@@ -15,6 +18,7 @@ from domain.services.bitacora_sync_service import (
     slugify_author,
     sync_bitacora_file,
 )
+from infra.db_migrations import get_project_members
 
 
 def test_parses_single_entry_with_all_fields():
@@ -621,3 +625,43 @@ def test_read_frontmatter_responsable_with_spaces():
 
 def test_read_frontmatter_responsable_missing_returns_none():
     assert read_frontmatter_responsable("---\nproject_id: MX-DDD-0005\n---\n") is None
+
+
+def test_get_project_status_returns_none_when_missing(temp_db_conn):
+    assert get_project_status(temp_db_conn, "NO-EXISTE-0001") is None
+
+
+def test_push_estado_updates_when_different(temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
+    )
+    temp_db_conn.commit()
+    change = push_estado(temp_db_conn, "MX-DDD-0005", "executing")
+    assert change == {"anterior": "approved", "nuevo": "executing"}
+    assert get_project_status(temp_db_conn, "MX-DDD-0005") == "executing"
+
+
+def test_push_estado_noop_when_same(temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
+    )
+    temp_db_conn.commit()
+    assert push_estado(temp_db_conn, "MX-DDD-0005", "executing") is None
+
+
+def test_push_responsable_adds_when_missing(temp_db_conn):
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    added = push_responsable(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy")
+    assert added == "Xiomara Monroy"
+    assert get_project_members(temp_db_conn, "MX-DDD-0005") == ["Xiomara Monroy"]
+
+
+def test_push_responsable_noop_when_already_member(temp_db_conn):
+    from infra.db_migrations import add_project_member
+
+    temp_db_conn.execute("INSERT INTO projects (id, project_id) VALUES ('P1','MX-DDD-0005')")
+    temp_db_conn.commit()
+    add_project_member(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy")
+    assert push_responsable(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy") is None
+    assert get_project_members(temp_db_conn, "MX-DDD-0005") == ["Xiomara Monroy"]

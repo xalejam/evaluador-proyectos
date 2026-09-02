@@ -8,7 +8,9 @@ from domain.services.bitacora_sync_service import (
     project_exists,
     pull_new_entries,
     push_entry,
+    read_frontmatter_estado,
     read_frontmatter_project_id,
+    read_frontmatter_responsable,
     render_entry_block,
     slugify_author,
     sync_bitacora_file,
@@ -601,3 +603,21 @@ def test_render_entry_block_round_trips_avance_override():
     reparsed = parse_bitacora_markdown(text)
     assert len(reparsed) == 1
     assert reparsed[0].avance_override == 70
+
+
+def test_read_frontmatter_estado():
+    text = "---\nproject_id: MX-DDD-0005\nestado: executing\n---\n\n# Index\n"
+    assert read_frontmatter_estado(text) == "executing"
+
+
+def test_read_frontmatter_estado_missing_returns_none():
+    assert read_frontmatter_estado("---\nproject_id: MX-DDD-0005\n---\n") is None
+
+
+def test_read_frontmatter_responsable_with_spaces():
+    text = "---\nproject_id: MX-DDD-0005\nresponsable: Xiomara Monroy\n---\n\n# Index\n"
+    assert read_frontmatter_responsable(text) == "Xiomara Monroy"
+
+
+def test_read_frontmatter_responsable_missing_returns_none():
+    assert read_frontmatter_responsable("---\nproject_id: MX-DDD-0005\n---\n") is None

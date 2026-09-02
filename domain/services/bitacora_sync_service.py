@@ -362,16 +362,30 @@ def pull_new_entries(conn, project_id: str, known_ids: set[str]) -> list[Bitacor
 
 
 FRONTMATTER_PROJECT_ID_RE = re.compile(r"^project_id:\s*(\S+)\s*$", re.MULTILINE)
+FRONTMATTER_ESTADO_RE = re.compile(r"^estado:\s*(\S+)\s*$", re.MULTILINE)
+FRONTMATTER_RESPONSABLE_RE = re.compile(r"^responsable:\s*(.+?)\s*$", re.MULTILINE)
 
 
-def read_frontmatter_project_id(text: str) -> str | None:
+def _frontmatter_field(text: str, pattern: re.Pattern[str]) -> str | None:
     if not text.startswith("---"):
         return None
     end = text.find("\n---", 3)
     if end == -1:
         return None
-    m = FRONTMATTER_PROJECT_ID_RE.search(text[3:end])
+    m = pattern.search(text[3:end])
     return m.group(1) if m else None
+
+
+def read_frontmatter_project_id(text: str) -> str | None:
+    return _frontmatter_field(text, FRONTMATTER_PROJECT_ID_RE)
+
+
+def read_frontmatter_estado(text: str) -> str | None:
+    return _frontmatter_field(text, FRONTMATTER_ESTADO_RE)
+
+
+def read_frontmatter_responsable(text: str) -> str | None:
+    return _frontmatter_field(text, FRONTMATTER_RESPONSABLE_RE)
 
 
 def sync_bitacora_file(conn, vault_path: Path) -> dict:

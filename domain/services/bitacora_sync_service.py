@@ -459,10 +459,38 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
     if new_local_entries or pulled_entries:
         vault_path.write_text(doc.render(), encoding="utf-8")
 
+    # estado/responsable viven en index.md, no en bitacora.md: se leen y
+    # sincronizan por separado, del archivo hermano en la misma carpeta.
+    estado_change: dict[str, str] | None = None
+    responsable_agregado: str | None = None
+    metadata_warning: str | None = None
+
+    index_path = vault_path.parent / "index.md"
+    if not index_path.exists():
+        metadata_warning = "no existe index.md junto a bitacora.md; no se sincronizó estado/responsable"
+    else:
+        index_text = index_path.read_text(encoding="utf-8")
+        index_project_id = read_frontmatter_project_id(index_text)
+        if index_project_id != project_id:
+            metadata_warning = (
+                f"index.md tiene project_id={index_project_id!r}, distinto al de bitacora.md "
+                f"({project_id!r}); no se sincronizó estado/responsable"
+            )
+        else:
+            estado = read_frontmatter_estado(index_text)
+            if estado:
+                estado_change = push_estado(conn, project_id, estado)
+            responsable = read_frontmatter_responsable(index_text)
+            if responsable:
+                responsable_agregado = push_responsable(conn, project_id, responsable)
+
     return {
         "pushed": len(entries_to_push),
         "pulled": len(pulled_entries),
         "skipped": False,
         "project_id": project_id,
         "unknown_authors": unknown_authors,
+        "estado_change": estado_change,
+        "responsable_agregado": responsable_agregado,
+        "metadata_warning": metadata_warning,
     }

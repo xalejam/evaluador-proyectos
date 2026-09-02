@@ -395,6 +395,9 @@ def test_sync_bitacora_file_pushes_new_local_entry(tmp_path, temp_db_conn):
         "skipped": False,
         "project_id": "MX-DDD-0005",
         "unknown_authors": [],
+        "estado_change": None,
+        "responsable_agregado": None,
+        "metadata_warning": "no existe index.md junto a bitacora.md; no se sincronizó estado/responsable",
     }
 
     rows = temp_db_conn.execute("SELECT * FROM project_notes").fetchall()
@@ -665,3 +668,66 @@ def test_push_responsable_noop_when_already_member(temp_db_conn):
     add_project_member(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy")
     assert push_responsable(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy") is None
     assert get_project_members(temp_db_conn, "MX-DDD-0005") == ["Xiomara Monroy"]
+
+
+def test_sync_bitacora_file_pushes_estado_and_responsable_from_index(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
+    )
+    temp_db_conn.commit()
+    (tmp_path / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: executing\nresponsable: Xiomara Monroy\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+
+    assert result["estado_change"] == {"anterior": "approved", "nuevo": "executing"}
+    assert result["responsable_agregado"] == "Xiomara Monroy"
+    assert result["metadata_warning"] is None
+    assert get_project_status(temp_db_conn, "MX-DDD-0005") == "executing"
+    assert get_project_members(temp_db_conn, "MX-DDD-0005") == ["Xiomara Monroy"]
+
+
+def test_sync_bitacora_file_metadata_noop_when_estado_already_matches(tmp_path, temp_db_conn):
+    from infra.db_migrations import add_project_member
+
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
+    )
+    temp_db_conn.commit()
+    add_project_member(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy")
+    (tmp_path / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: executing\nresponsable: Xiomara Monroy\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+
+    assert result["estado_change"] is None
+    assert result["responsable_agregado"] is None
+    assert result["metadata_warning"] is None
+
+
+def test_sync_bitacora_file_warns_when_index_project_id_mismatches(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
+    )
+    temp_db_conn.commit()
+    (tmp_path / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0099\nestado: executing\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = tmp_path / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+
+    assert result["estado_change"] is None
+    assert result["responsable_agregado"] is None
+    assert "distinto al de bitacora.md" in result["metadata_warning"]
+    assert get_project_status(temp_db_conn, "MX-DDD-0005") == "approved"

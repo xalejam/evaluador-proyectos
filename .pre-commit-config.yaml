@@ -4,4 +4,4 @@ repos:
     hooks:
       - id: detect-secrets
         args: ["--baseline", ".secrets.baseline"]
-        exclude: ^(\.venv/|\.claude/worktrees/|logs/)
+        exclude: ^(\.venv/|\.claude/worktrees/|logs/|scripts/migration_data\.sql$)

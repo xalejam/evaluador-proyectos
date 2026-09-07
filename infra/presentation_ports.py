@@ -15,6 +15,9 @@ from generate_execution_status_presentation import (  # noqa: E402
     ProjectStatus,
     build_presentation_bytes,
 )
+from generate_execution_status_presentation import (  # noqa: E402
+    fetch_all_projects as _fetch_all_projects_sql,
+)
 
 DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
 
@@ -83,6 +86,15 @@ ORDER BY COALESCE(lp.created_at, p.updated_at, p.created_date) DESC, p.project_i
 """
 
 
+def _clean_pptx_value(value):
+    """PostgreSQL/pandas puede devolver NaN o Timestamp donde el dataclass espera None/str."""
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    if isinstance(value, float) and value != value:  # NaN != NaN
+        return None
+    return value
+
+
 @runtime_checkable
 class DataSource(Protocol):
     def fetch_projects(self) -> list[ProjectStatus]: ...
@@ -106,8 +118,6 @@ class SqliteDataSource:
         self._db_path = Path(db_path).resolve()
 
     def fetch_projects(self) -> list[ProjectStatus]:
-        import pandas as pd
-
         from infra.db.adapter import db_read_dataframe, get_connection
 
         conn = get_connection(local_path=str(self._db_path))
@@ -117,16 +127,27 @@ class SqliteDataSource:
         if df.empty:
             return []
 
-        # PostgreSQL retorna progress_percent como float nullable → int|None
-        df["progress_percent"] = df["progress_percent"].apply(
-            lambda x: int(x) if x is not None and not pd.isna(x) else None
-        )
-        # PostgreSQL retorna created_at como Timestamp → str ISO para el dataclass
-        df["progress_at"] = df["progress_at"].apply(
-            lambda x: x.isoformat() if hasattr(x, "isoformat") else (str(x) if x is not None else None)
-        )
+        # Normaliza fila por fila (no columna por columna): reasignar una
+        # columna del DataFrame después de un .apply() puede hacer que
+        # pandas vuelva a inferir el dtype y convierta huecos None en
+        # float('nan') — justo el bug que causaba "Invalid isoformat
+        # string: 'nan'" al generar la presentación.
+        records = [{k: _clean_pptx_value(v) for k, v in row.items()} for row in df.to_dict(orient="records")]
+        for row in records:
+            if row["progress_percent"] is not None:
+                row["progress_percent"] = int(row["progress_percent"])
 
-        return [ProjectStatus(**row) for row in df.to_dict(orient="records")]
+        return [ProjectStatus(**row) for row in records]
+
+    def fetch_all_projects(self) -> list[dict]:
+        """Trae los 21 proyectos del portafolio (no solo executing) para portada/pipeline."""
+        from infra.db.adapter import get_connection
+
+        conn = get_connection(local_path=str(self._db_path))
+        try:
+            return _fetch_all_projects_sql(conn)
+        finally:
+            conn.close()
 
 
 class InMemoryDestination:

@@ -18,6 +18,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+from domain.services.executive_summary_service import compute_portfolio_summary
 from domain.services.seguimiento_operativo_service import OperationalTrackingService
 from infra.db.adapter import PLACEHOLDER, db_read_dataframe
 from infra.db.connection import get_sqlite_conn as get_conn
@@ -1834,7 +1835,9 @@ def _render_executive_tab(conn: sqlite3.Connection) -> None:
                 if not projects:
                     st.warning("No hay proyectos en ejecución para incluir en la presentación.")
                 else:
-                    data = InMemoryDestination().save(_build_pptx_bytes(projects))
+                    all_projects = SqliteDataSource().fetch_all_projects()
+                    summary = compute_portfolio_summary(all_projects)
+                    data = InMemoryDestination().save(_build_pptx_bytes(all_projects, projects, summary, {}))
                     filename = f"Resumen_Proyectos_Ejecucion_{date.today()}.pptx"
                     # When a cloud destination returns a str URL, add isinstance(data, bytes) dispatch here.
                     st.download_button(

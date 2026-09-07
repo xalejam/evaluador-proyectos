@@ -17,25 +17,38 @@ DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
 OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
 LOGO_PATH = Path("logo_DDNola.png")
 
-# Colors
-C_HEADER_BG = RGBColor(7, 89, 90)
-C_HEADER_TEXT = RGBColor(255, 255, 255)
-C_HEADER_SUB = RGBColor(160, 220, 220)
-C_HEADER_CUT = RGBColor(200, 235, 235)
-C_BODY_BG = RGBColor(248, 250, 252)
-C_ROW_ODD = RGBColor(255, 255, 255)
-C_ROW_EVEN = RGBColor(248, 250, 252)
-C_ROW_BORDER = RGBColor(226, 232, 240)
-C_SEPARATOR = RGBColor(203, 213, 225)
-C_TEXT_DARK = RGBColor(15, 23, 42)
-C_TEXT_MID = RGBColor(51, 65, 85)
-C_TEXT_LIGHT = RGBColor(100, 116, 139)
-C_TEXT_BLUE = RGBColor(71, 85, 105)
-C_TEXT_BLUE2 = RGBColor(191, 219, 254)
-C_CARD_BG = RGBColor(241, 245, 249)
-C_CARD_BORDER = RGBColor(203, 213, 225)
-C_RISK_HIGH = RGBColor(220, 38, 38)
-C_RISK_MED = RGBColor(217, 119, 6)
+# Paleta oficial Worldpanel (skill anthropic-skills:worldpanel-brand)
+C_HEADER_BG = RGBColor(0x00, 0x4A, 0x52)  # Deep Teal
+C_HEADER_TEXT = RGBColor(0xFF, 0xFF, 0xFF)
+C_HEADER_SUB = RGBColor(0x2E, 0xEF, 0xEE)  # Aqua
+C_HEADER_CUT = RGBColor(0x2E, 0xEF, 0xEE)  # Aqua
+C_BODY_BG = RGBColor(0xFF, 0xFF, 0xFF)
+C_ROW_ODD = RGBColor(0xFF, 0xFF, 0xFF)
+C_ROW_EVEN = RGBColor(0xF2, 0xF7, 0xF7)
+C_ROW_BORDER = RGBColor(0xDC, 0xE6, 0xE6)
+C_SEPARATOR = RGBColor(0xDC, 0xE6, 0xE6)
+C_TEXT_DARK = RGBColor(0x00, 0x4A, 0x52)  # Deep Teal
+C_TEXT_MID = RGBColor(0x3D, 0x63, 0x67)
+C_TEXT_LIGHT = RGBColor(0x6B, 0x8A, 0x8D)
+C_TEXT_BLUE = RGBColor(0x00, 0xA8, 0xB8)  # Worldpanel Blue
+C_TEXT_BLUE2 = RGBColor(0x2E, 0xEF, 0xEE)  # Aqua
+C_CARD_BG = RGBColor(0xEA, 0xF6, 0xF6)
+C_CARD_BORDER = RGBColor(0xCF, 0xE6, 0xE6)
+C_RISK_HIGH = RGBColor(0xF8, 0x71, 0xA0)  # Rose (chart: pérdidas)
+C_RISK_MED = RGBColor(0xFF, 0xD6, 0x1F)  # Yellow
+
+# Colores de estado para el pipeline — paleta "no secuencial" de charts.
+# evaluated/backlog comparten color: dashboard.md también los trata igual (⚪).
+C_STATUS = {
+    "evaluated": RGBColor(0xFF, 0x82, 0x00),  # Orange
+    "backlog": RGBColor(0xFF, 0x82, 0x00),  # Orange
+    "approved": RGBColor(0x01, 0x79, 0xFF),  # Cobalt
+    "executing": RGBColor(0x1A, 0xA7, 0xB7),  # Worldpanel Blue (variante chart)
+    "implemented": RGBColor(0x2B, 0xEF, 0xB9),  # Mint
+    "on_hold": RGBColor(0xFF, 0xD6, 0x1F),  # Yellow
+    "handed_off": RGBColor(0x00, 0x4A, 0x52),  # Deep Teal
+    "rejected": RGBColor(0xF8, 0x71, 0xA0),  # Rose
+}
 
 # Layout — slide dimensions
 SLIDE_W = Inches(13.333)
@@ -133,12 +146,12 @@ def latest_update(projects: Iterable[ProjectStatus]) -> str:
 
 def progress_color(progress: int | None) -> RGBColor:
     if progress is None:
-        return RGBColor(160, 174, 192)
+        return C_TEXT_LIGHT
     if progress >= 70:
-        return RGBColor(22, 163, 74)
+        return RGBColor(0x2B, 0xEF, 0xB9)  # Mint
     if progress >= 50:
-        return RGBColor(245, 158, 11)
-    return RGBColor(220, 38, 38)
+        return RGBColor(0xFF, 0xD6, 0x1F)  # Yellow
+    return RGBColor(0xF8, 0x71, 0xA0)  # Rose
 
 
 def risk_color(risk: str) -> RGBColor:

@@ -4,6 +4,9 @@
 Uso:
     $env:DATABASE_URL = "postgresql://..."
     python scripts/sync_bitacora_from_vault.py --vault "C:\\ruta\\al\\vault"
+
+    # Solo un proyecto (slug = carpeta bajo proyectos/):
+    python scripts/sync_bitacora_from_vault.py --vault "C:\\ruta\\al\\vault" --proyecto mi-proyecto
 """
 
 import argparse
@@ -37,13 +40,24 @@ def get_vault_repo_url(vault_root: Path) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vault", required=True, help="Ruta al repo del vault de Obsidian")
+    parser.add_argument(
+        "--proyecto",
+        help="Slug de un solo proyecto (carpeta bajo proyectos/) a sincronizar; por defecto sincroniza todos",
+    )
     args = parser.parse_args()
 
     vault_root = Path(args.vault)
-    bitacora_files = sorted(vault_root.glob("proyectos/*/bitacora.md"))
-    if not bitacora_files:
-        print(f"No se encontraron bitacora.md bajo {vault_root / 'proyectos'}")
-        return 1
+    if args.proyecto:
+        bitacora_path = vault_root / "proyectos" / args.proyecto / "bitacora.md"
+        if not bitacora_path.exists():
+            print(f"No se encontró {bitacora_path}")
+            return 1
+        bitacora_files = [bitacora_path]
+    else:
+        bitacora_files = sorted(vault_root.glob("proyectos/*/bitacora.md"))
+        if not bitacora_files:
+            print(f"No se encontraron bitacora.md bajo {vault_root / 'proyectos'}")
+            return 1
 
     vault_repo_url = get_vault_repo_url(vault_root)
     if not vault_repo_url:

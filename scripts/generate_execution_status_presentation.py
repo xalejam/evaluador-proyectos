@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sqlite3
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -22,8 +22,7 @@ from domain.services.executive_summary_service import (
 
 PIPELINE_ORDER = ALL_STATUSES
 
-DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
-OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
+DEFAULT_OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
 LOGO_PATH = Path("logo_DDNola.png")
 
 # Paleta oficial Worldpanel (skill anthropic-skills:worldpanel-brand)
@@ -215,12 +214,8 @@ def _draw_header(slide, prs, slide_num: int, total_slides: int, title: str, subt
     header.fill.fore_color.rgb = C_HEADER_BG
     header.line.color.rgb = C_HEADER_BG
 
-    add_textbox(
-        slide, Inches(0.45), Inches(0.18), Inches(9.0), Inches(0.3), title, 24, bold=True, color=C_HEADER_TEXT
-    )
-    add_textbox(
-        slide, Inches(0.45), Inches(0.5), Inches(6.0), Inches(0.18), subtitle, 9, color=C_HEADER_SUB
-    )
+    add_textbox(slide, Inches(0.45), Inches(0.18), Inches(9.0), Inches(0.3), title, 24, bold=True, color=C_HEADER_TEXT)
+    add_textbox(slide, Inches(0.45), Inches(0.5), Inches(6.0), Inches(0.18), subtitle, 9, color=C_HEADER_SUB)
 
     if total_slides > 1:
         add_textbox(
@@ -427,8 +422,15 @@ def _draw_footer(slide, generated_at: str) -> None:
 def _draw_pipeline(slide, status_counts: dict[str, int], top) -> None:
     total = sum(status_counts.values()) or 1
     add_textbox(
-        slide, Inches(0.45), top, Inches(6.0), Inches(0.2),
-        f"Pipeline del portafolio · {sum(status_counts.values())} proyectos", 9, bold=True, color=C_TEXT_LIGHT,
+        slide,
+        Inches(0.45),
+        top,
+        Inches(6.0),
+        Inches(0.2),
+        f"Pipeline del portafolio · {sum(status_counts.values())} proyectos",
+        9,
+        bold=True,
+        color=C_TEXT_LIGHT,
     )
 
     bar_top = top + Inches(0.3)
@@ -450,13 +452,21 @@ def _draw_pipeline(slide, status_counts: dict[str, int], top) -> None:
     col_w = Inches(1.55)
     for i, status in enumerate(PIPELINE_ORDER):
         cx = Emu(int(bar_left) + int(col_w) * i)
-        dot = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.OVAL, cx, legend_top + Inches(0.03), Inches(0.12), Inches(0.12))
+        dot = slide.shapes.add_shape(
+            MSO_AUTO_SHAPE_TYPE.OVAL, cx, legend_top + Inches(0.03), Inches(0.12), Inches(0.12)
+        )
         dot.fill.solid()
         dot.fill.fore_color.rgb = C_STATUS[status]
         dot.line.color.rgb = C_STATUS[status]
         add_textbox(
-            slide, cx + Inches(0.18), legend_top, Inches(1.35), Inches(0.2),
-            f"{STATUS_LABELS_ES[status]} {status_counts[status]}", 8, color=C_TEXT_MID,
+            slide,
+            cx + Inches(0.18),
+            legend_top,
+            Inches(1.35),
+            Inches(0.2),
+            f"{STATUS_LABELS_ES[status]} {status_counts[status]}",
+            8,
+            color=C_TEXT_MID,
         )
 
 
@@ -498,7 +508,10 @@ def build_summary_slide(
     bg.fore_color.rgb = C_BODY_BG
 
     _draw_header(
-        slide, prs, slide_num, total_slides,
+        slide,
+        prs,
+        slide_num,
+        total_slides,
         title="Resumen ejecutivo · Portafolio Data & Automatización",
         subtitle=f"Corte: {generated_at} · Fuente: Supabase (projects)",
     )
@@ -513,10 +526,15 @@ def build_summary_slide(
         add_metric_card(slide, Inches(0.45 + i * 2.45), title, value, subtitle)
 
     add_textbox(
-        slide, Inches(0.45), Inches(2.05), Inches(12.4), Inches(0.5),
+        slide,
+        Inches(0.45),
+        Inches(2.05),
+        Inches(12.4),
+        Inches(0.5),
         f"Cada mes, el equipo ahorra el equivalente a {summary.fte_equivalent} de trabajo de una "
         f"persona a tiempo completo — con base en las {summary.closed_count} automatizaciones ya cerradas.",
-        12, color=C_TEXT_DARK,
+        12,
+        color=C_TEXT_DARK,
     )
 
     _draw_pipeline(slide, summary.status_counts, Inches(2.75))
@@ -537,7 +555,10 @@ def build_slide(
     bg.fore_color.rgb = C_BODY_BG
 
     _draw_header(
-        slide, prs, slide_num, total_slides,
+        slide,
+        prs,
+        slide_num,
+        total_slides,
         title="Detalle · Proyectos en ejecución",
         subtitle="Fuente: Supabase (project_notes)",
     )
@@ -550,35 +571,84 @@ def build_slide(
     _draw_footer(slide, generated_at)
 
 
-def _build_prs(projects: list[ProjectStatus]) -> Presentation:
+def _build_prs(
+    all_projects: list[dict],
+    executing: list[ProjectStatus],
+    summary: PortfolioSummary,
+    notes_by_id: dict,
+) -> Presentation:
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
-    chunks = [projects[i : i + ROWS_PER_SLIDE] for i in range(0, len(projects), ROWS_PER_SLIDE)]
     generated_at = datetime.now().strftime("%d/%m/%Y %H:%M")
-    for n, chunk in enumerate(chunks, start=1):
-        build_slide(prs, chunk, n, len(chunks), projects, generated_at)
+
+    chunks = [executing[i : i + ROWS_PER_SLIDE] for i in range(0, len(executing), ROWS_PER_SLIDE)]
+    total_slides = 1 + len(chunks)
+
+    build_summary_slide(prs, summary, notes_by_id, all_projects, generated_at, 1, total_slides)
+    for n, chunk in enumerate(chunks, start=2):
+        build_slide(prs, chunk, n, total_slides, generated_at)
     return prs
 
 
-def build_presentation(projects: list[ProjectStatus], output_path: Path) -> Path:
-    prs = _build_prs(projects)
+def build_presentation(
+    all_projects: list[dict],
+    executing: list[ProjectStatus],
+    summary: PortfolioSummary,
+    notes_by_id: dict,
+    output_path: Path,
+) -> Path:
+    prs = _build_prs(all_projects, executing, summary, notes_by_id)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(output_path)
     return output_path
 
 
-def build_presentation_bytes(projects: list[ProjectStatus]) -> bytes:
+def build_presentation_bytes(
+    all_projects: list[dict], executing: list[ProjectStatus], summary: PortfolioSummary, notes_by_id: dict
+) -> bytes:
     buf = BytesIO()
-    _build_prs(projects).save(buf)
+    _build_prs(all_projects, executing, summary, notes_by_id).save(buf)
     return buf.getvalue()
 
 
+def parse_args(argv=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Genera el deck ejecutivo (resumen + detalle operativo).")
+    parser.add_argument("--notes", default=None, help="Ruta al JSON de notas por proyecto (opcional).")
+    parser.add_argument("--out", default=None, help="Ruta de salida del .pptx.")
+    return parser.parse_args(argv)
+
+
 def main() -> None:
-    projects = fetch_executing_projects(DB_PATH)
-    if not projects:
-        raise SystemExit("No hay proyectos con status 'executing'.")
-    path = build_presentation(projects, OUTPUT_PATH)
+    if not os.environ.get("DATABASE_URL"):
+        raise SystemExit(
+            "DATABASE_URL no está seteada. Este script requiere Supabase — "
+            "seteala en la sesión antes de correr (mismo requisito que /sync-bitacora)."
+        )
+
+    args = parse_args()
+
+    from infra.db.adapter import get_connection
+
+    conn = get_connection()
+    try:
+        all_projects = fetch_all_projects(conn)
+        executing = fetch_executing_projects(conn)
+    finally:
+        conn.close()
+
+    if not all_projects:
+        raise SystemExit("No hay proyectos en Supabase.")
+
+    from domain.services.executive_summary_service import compute_portfolio_summary, load_project_notes
+
+    summary = compute_portfolio_summary(all_projects)
+    notes_by_id = load_project_notes(args.notes)
+    out_path = Path(args.out) if args.out else DEFAULT_OUTPUT_PATH
+
+    path = build_presentation(all_projects, executing, summary, notes_by_id, out_path)
     print(path)
 
 

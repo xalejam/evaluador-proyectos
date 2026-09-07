@@ -2,20 +2,24 @@ from domain.services.bitacora_sync_service import (
     BitacoraDocument,
     BitacoraEntry,
     build_entry_group_id,
+    compute_loop_url,
     compute_rollup,
     find_existing_entry_group_ids,
+    get_project_loop_url,
     get_project_status,
     parse_bitacora_markdown,
     project_exists,
     pull_new_entries,
     push_estado,
     push_entry,
+    push_loop_url,
     push_responsable,
     read_frontmatter_estado,
     read_frontmatter_project_id,
     read_frontmatter_responsable,
     render_entry_block,
     slugify_author,
+    strip_git_userinfo,
     sync_bitacora_file,
 )
 from infra.db_migrations import get_project_members
@@ -397,6 +401,7 @@ def test_sync_bitacora_file_pushes_new_local_entry(tmp_path, temp_db_conn):
         "unknown_authors": [],
         "estado_change": None,
         "responsable_agregado": None,
+        "loop_url_change": None,
         "metadata_warning": "no existe index.md junto a bitacora.md; no se sincronizó estado/responsable",
     }
 
@@ -780,3 +785,111 @@ def test_sync_bitacora_file_invalid_estado_does_not_block_responsable_push(tmp_p
     result = sync_bitacora_file(temp_db_conn, bitacora)
 
     assert result["responsable_agregado"] == "Xiomara Monroy"
+
+
+def test_strip_git_userinfo_removes_account_prefix():
+    url = "https://DataDevelopersNola@dev.azure.com/DataDevelopersNola/Documentaci%C3%B3n%20de%20Proyectos/_git/Documentaci%C3%B3n%20de%20Proyectos"
+    assert strip_git_userinfo(url) == (
+        "https://dev.azure.com/DataDevelopersNola/Documentaci%C3%B3n%20de%20Proyectos"
+        "/_git/Documentaci%C3%B3n%20de%20Proyectos"
+    )
+
+
+def test_strip_git_userinfo_noop_when_no_prefix():
+    url = "https://dev.azure.com/org/proyecto/_git/repo"
+    assert strip_git_userinfo(url) == url
+
+
+def test_compute_loop_url_builds_deep_link_to_index():
+    assert compute_loop_url("https://dev.azure.com/org/proyecto/_git/repo", "mwp-access-hub") == (
+        "https://dev.azure.com/org/proyecto/_git/repo?path=/proyectos/mwp-access-hub/index.md"
+    )
+
+
+def test_get_project_loop_url_returns_none_when_missing(temp_db_conn):
+    assert get_project_loop_url(temp_db_conn, "NO-EXISTE-0001") is None
+
+
+def test_push_loop_url_updates_when_different(temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, loop_url) VALUES ('P1','MX-DDD-0005','https://loop.old/x')"
+    )
+    temp_db_conn.commit()
+    change = push_loop_url(temp_db_conn, "MX-DDD-0005", "https://dev.azure.com/x?path=/proyectos/x/index.md")
+    assert change == {
+        "anterior": "https://loop.old/x",
+        "nuevo": "https://dev.azure.com/x?path=/proyectos/x/index.md",
+    }
+    assert get_project_loop_url(temp_db_conn, "MX-DDD-0005") == "https://dev.azure.com/x?path=/proyectos/x/index.md"
+
+
+def test_push_loop_url_noop_when_same(temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, loop_url) VALUES ('P1','MX-DDD-0005','https://dev.azure.com/x')"
+    )
+    temp_db_conn.commit()
+    assert push_loop_url(temp_db_conn, "MX-DDD-0005", "https://dev.azure.com/x") is None
+
+
+def test_sync_bitacora_file_pushes_loop_url_when_vault_repo_url_given(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
+    )
+    temp_db_conn.commit()
+    project_dir = tmp_path / "proyectos" / "mwp-access-hub"
+    project_dir.mkdir(parents=True)
+    (project_dir / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: executing\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = project_dir / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora, "https://dev.azure.com/org/vault/_git/vault")
+
+    expected_url = "https://dev.azure.com/org/vault/_git/vault?path=/proyectos/mwp-access-hub/index.md"
+    assert result["loop_url_change"] == {"anterior": None, "nuevo": expected_url}
+    assert get_project_loop_url(temp_db_conn, "MX-DDD-0005") == expected_url
+
+
+def test_sync_bitacora_file_skips_loop_url_when_no_vault_repo_url(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
+    )
+    temp_db_conn.commit()
+    project_dir = tmp_path / "proyectos" / "mwp-access-hub"
+    project_dir.mkdir(parents=True)
+    (project_dir / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: executing\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = project_dir / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora)
+
+    assert result["loop_url_change"] is None
+    assert get_project_loop_url(temp_db_conn, "MX-DDD-0005") is None
+
+
+def test_sync_bitacora_file_pushes_loop_url_even_when_estado_invalid(tmp_path, temp_db_conn):
+    temp_db_conn.execute(
+        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
+    )
+    temp_db_conn.commit()
+    project_dir = tmp_path / "proyectos" / "mwp-access-hub"
+    project_dir.mkdir(parents=True)
+    (project_dir / "index.md").write_text(
+        "---\nproject_id: MX-DDD-0005\nestado: ejecutando\n---\n\n# Index\n",
+        encoding="utf-8",
+    )
+    bitacora = project_dir / "bitacora.md"
+    bitacora.write_text("---\nproject_id: MX-DDD-0005\n---\n\n# Bitácora\n\n", encoding="utf-8")
+
+    result = sync_bitacora_file(temp_db_conn, bitacora, "https://dev.azure.com/org/vault/_git/vault")
+
+    assert result["estado_change"] is None
+    assert result["loop_url_change"] == {
+        "anterior": None,
+        "nuevo": "https://dev.azure.com/org/vault/_git/vault?path=/proyectos/mwp-access-hub/index.md",
+    }

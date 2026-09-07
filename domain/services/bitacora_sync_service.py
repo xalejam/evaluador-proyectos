@@ -11,7 +11,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from infra.db.adapter import IS_CLOUD, PLACEHOLDER
-from infra.db_migrations import add_project_member, get_project_members, update_project_status
+from infra.db_migrations import (
+    add_project_member,
+    get_project_members,
+    update_project_loop_url,
+    update_project_status,
+)
 
 DATE_RE = re.compile(r"^## (\d{4}-\d{2}-\d{2})\s*$")
 ROLLUP_RE = re.compile(r"^_Acumulado del proyecto: [\d.]+h · Avance: (?:\d+%|sin dato)_\s*$")
@@ -277,6 +282,42 @@ def push_estado(conn, project_id: str, estado: str) -> dict[str, str] | None:
     return {"anterior": current, "nuevo": estado}
 
 
+USERINFO_RE = re.compile(r"^(https://)[^/@]+@")
+
+
+def strip_git_userinfo(url: str) -> str:
+    """Quita el prefijo `usuario@` que Azure DevOps antepone al host en el
+    resultado de `git remote get-url origin`. Describe la cuenta con la que
+    se clonó, no al repositorio, así que no participa en la comparación. El
+    resto de la URL (incluido /_git/ y la codificación de caracteres) se
+    conserva tal cual."""
+    return USERINFO_RE.sub(r"\1", url)
+
+
+def compute_loop_url(vault_repo_url: str, project_slug: str) -> str:
+    """Arma el deep link al index.md de un proyecto dentro del vault de
+    Obsidian, reemplazo de lo que antes era el link a Microsoft Loop."""
+    return f"{vault_repo_url}?path=/proyectos/{project_slug}/index.md"
+
+
+def get_project_loop_url(conn, project_id: str) -> str | None:
+    row = conn.execute(f"SELECT loop_url FROM projects WHERE project_id = {PLACEHOLDER}", (project_id,)).fetchone()
+    if row is None:
+        return None
+    return row["loop_url"] if isinstance(row, dict) else row[0]
+
+
+def push_loop_url(conn, project_id: str, loop_url: str) -> dict[str, str | None] | None:
+    """Actualiza projects.loop_url si difiere del calculado desde el vault
+    (el vault gana). Devuelve {'anterior': ..., 'nuevo': loop_url} si
+    escribió, None si ya coincidía."""
+    current = get_project_loop_url(conn, project_id)
+    if current == loop_url:
+        return None
+    update_project_loop_url(conn, project_id, loop_url)
+    return {"anterior": current, "nuevo": loop_url}
+
+
 def push_responsable(conn, project_id: str, responsable: str) -> str | None:
     """Agrega el responsable del vault a project_members si todavía no está.
     Devuelve el nombre si lo agregó, None si ya era miembro."""
@@ -425,7 +466,7 @@ def read_frontmatter_responsable(text: str) -> str | None:
     return _frontmatter_field(text, FRONTMATTER_RESPONSABLE_RE)
 
 
-def sync_bitacora_file(conn, vault_path: Path) -> dict:
+def sync_bitacora_file(conn, vault_path: Path, vault_repo_url: str | None = None) -> dict:
     text = vault_path.read_text(encoding="utf-8")
     project_id = read_frontmatter_project_id(text)
     if not project_id or not project_exists(conn, project_id):
@@ -470,6 +511,7 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
     # sincronizan por separado, del archivo hermano en la misma carpeta.
     estado_change: dict[str, str] | None = None
     responsable_agregado: str | None = None
+    loop_url_change: dict[str, str | None] | None = None
     metadata_warning: str | None = None
 
     index_path = vault_path.parent / "index.md"
@@ -496,6 +538,9 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
             responsable = read_frontmatter_responsable(index_text)
             if responsable:
                 responsable_agregado = push_responsable(conn, project_id, responsable)
+            if vault_repo_url:
+                loop_url = compute_loop_url(vault_repo_url, vault_path.parent.name)
+                loop_url_change = push_loop_url(conn, project_id, loop_url)
 
     return {
         "pushed": len(entries_to_push),
@@ -505,5 +550,6 @@ def sync_bitacora_file(conn, vault_path: Path) -> dict:
         "unknown_authors": unknown_authors,
         "estado_change": estado_change,
         "responsable_agregado": responsable_agregado,
+        "loop_url_change": loop_url_change,
         "metadata_warning": metadata_warning,
     }

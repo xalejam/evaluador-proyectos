@@ -409,6 +409,17 @@ def update_project_status(conn, project_id: str, status: str) -> None:
     conn.commit()
 
 
+def update_project_loop_url(conn, project_id: str, loop_url: str) -> None:
+    from infra.db.adapter import db_now
+
+    conn.execute(
+        f"UPDATE projects SET loop_url = {PLACEHOLDER}, updated_at = {PLACEHOLDER} "
+        f"WHERE id = {PLACEHOLDER} OR project_id = {PLACEHOLDER}",
+        (loop_url.strip(), db_now(), project_id.strip(), project_id.strip()),
+    )
+    conn.commit()
+
+
 def ensure_members_schema(conn) -> None:
     """Crea tabla project_members si no existe (SQLite local y PostgreSQL cloud)."""
     from infra.db.adapter import IS_CLOUD, db_table_exists

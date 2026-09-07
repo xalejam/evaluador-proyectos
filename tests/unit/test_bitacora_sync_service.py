@@ -10,8 +10,8 @@ from domain.services.bitacora_sync_service import (
     parse_bitacora_markdown,
     project_exists,
     pull_new_entries,
-    push_estado,
     push_entry,
+    push_estado,
     push_loop_url,
     push_responsable,
     read_frontmatter_estado,
@@ -640,9 +640,7 @@ def test_get_project_status_returns_none_when_missing(temp_db_conn):
 
 
 def test_push_estado_updates_when_different(temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')")
     temp_db_conn.commit()
     change = push_estado(temp_db_conn, "MX-DDD-0005", "executing")
     assert change == {"anterior": "approved", "nuevo": "executing"}
@@ -650,22 +648,16 @@ def test_push_estado_updates_when_different(temp_db_conn):
 
 
 def test_push_estado_noop_when_same(temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')")
     temp_db_conn.commit()
     assert push_estado(temp_db_conn, "MX-DDD-0005", "executing") is None
 
 
 def test_push_estado_sets_closed_at_when_transitioning_to_implemented(temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')")
     temp_db_conn.commit()
     push_estado(temp_db_conn, "MX-DDD-0005", "implemented")
-    row = temp_db_conn.execute(
-        "SELECT closed_at FROM projects WHERE project_id = ?", ("MX-DDD-0005",)
-    ).fetchone()
+    row = temp_db_conn.execute("SELECT closed_at FROM projects WHERE project_id = ?", ("MX-DDD-0005",)).fetchone()
     closed_at = row["closed_at"] if isinstance(row, dict) else row[0]
     assert closed_at is not None
 
@@ -689,9 +681,7 @@ def test_push_responsable_noop_when_already_member(temp_db_conn):
 
 
 def test_sync_bitacora_file_pushes_estado_and_responsable_from_index(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')")
     temp_db_conn.commit()
     (tmp_path / "index.md").write_text(
         "---\nproject_id: MX-DDD-0005\nestado: executing\nresponsable: Xiomara Monroy\n---\n\n# Index\n",
@@ -712,9 +702,7 @@ def test_sync_bitacora_file_pushes_estado_and_responsable_from_index(tmp_path, t
 def test_sync_bitacora_file_metadata_noop_when_estado_already_matches(tmp_path, temp_db_conn):
     from infra.db_migrations import add_project_member
 
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')")
     temp_db_conn.commit()
     add_project_member(temp_db_conn, "MX-DDD-0005", "Xiomara Monroy")
     (tmp_path / "index.md").write_text(
@@ -732,9 +720,7 @@ def test_sync_bitacora_file_metadata_noop_when_estado_already_matches(tmp_path, 
 
 
 def test_sync_bitacora_file_warns_when_index_project_id_mismatches(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')")
     temp_db_conn.commit()
     (tmp_path / "index.md").write_text(
         "---\nproject_id: MX-DDD-0099\nestado: executing\n---\n\n# Index\n",
@@ -752,9 +738,7 @@ def test_sync_bitacora_file_warns_when_index_project_id_mismatches(tmp_path, tem
 
 
 def test_sync_bitacora_file_warns_on_invalid_estado_and_does_not_write(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')")
     temp_db_conn.commit()
     (tmp_path / "index.md").write_text(
         "---\nproject_id: MX-DDD-0005\nestado: ejecutando\n---\n\n# Index\n",
@@ -771,9 +755,7 @@ def test_sync_bitacora_file_warns_on_invalid_estado_and_does_not_write(tmp_path,
 
 
 def test_sync_bitacora_file_invalid_estado_does_not_block_responsable_push(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')")
     temp_db_conn.commit()
     (tmp_path / "index.md").write_text(
         "---\nproject_id: MX-DDD-0005\nestado: ejecutando\nresponsable: Xiomara Monroy\n---\n\n# Index\n",
@@ -832,9 +814,7 @@ def test_push_loop_url_noop_when_same(temp_db_conn):
 
 
 def test_sync_bitacora_file_pushes_loop_url_when_vault_repo_url_given(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')")
     temp_db_conn.commit()
     project_dir = tmp_path / "proyectos" / "mwp-access-hub"
     project_dir.mkdir(parents=True)
@@ -853,9 +833,7 @@ def test_sync_bitacora_file_pushes_loop_url_when_vault_repo_url_given(tmp_path, 
 
 
 def test_sync_bitacora_file_skips_loop_url_when_no_vault_repo_url(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','executing')")
     temp_db_conn.commit()
     project_dir = tmp_path / "proyectos" / "mwp-access-hub"
     project_dir.mkdir(parents=True)
@@ -873,9 +851,7 @@ def test_sync_bitacora_file_skips_loop_url_when_no_vault_repo_url(tmp_path, temp
 
 
 def test_sync_bitacora_file_pushes_loop_url_even_when_estado_invalid(tmp_path, temp_db_conn):
-    temp_db_conn.execute(
-        "INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')"
-    )
+    temp_db_conn.execute("INSERT INTO projects (id, project_id, status) VALUES ('P1','MX-DDD-0005','approved')")
     temp_db_conn.commit()
     project_dir = tmp_path / "proyectos" / "mwp-access-hub"
     project_dir.mkdir(parents=True)

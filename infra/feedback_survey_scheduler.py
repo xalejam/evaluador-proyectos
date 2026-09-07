@@ -8,7 +8,7 @@ from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-from infra.db.adapter import PLACEHOLDER, IS_CLOUD, get_connection
+from infra.db.adapter import IS_CLOUD, PLACEHOLDER, get_connection
 
 
 def build_send_at(base_date: datetime | None, send_after_months: int) -> datetime:

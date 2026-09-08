@@ -13,7 +13,7 @@ if str(_SCRIPTS) not in sys.path:
 
 from generate_execution_status_presentation import (  # noqa: E402
     ProjectStatus,
-    build_presentation_bytes,
+    build_detail_only_presentation_bytes,
 )
 
 DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
@@ -24,7 +24,7 @@ __all__ = [
     "SqliteDataSource",
     "InMemoryDestination",
     "ProjectStatus",
-    "build_presentation_bytes",
+    "build_detail_only_presentation_bytes",
 ]
 
 # ---------------------------------------------------------------------------

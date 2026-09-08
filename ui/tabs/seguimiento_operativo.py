@@ -27,7 +27,7 @@ from infra.presentation_ports import (
     SqliteDataSource,
 )
 from infra.presentation_ports import (
-    build_presentation_bytes as _build_pptx_bytes,
+    build_detail_only_presentation_bytes as _build_pptx_bytes,
 )
 from infra.status_machine import can_transition
 from ui.i18n_labels import label_note_type, label_status

@@ -186,9 +186,12 @@ def add_textbox(slide, left, top, width, height, text, font_size, *, bold=False,
     tf = box.text_frame
     tf.word_wrap = True
     p = tf.paragraphs[0]
-    p.text = text
     p.alignment = align
-    run = p.runs[0]
+    # p.text = text no crea ningun run cuando text es "" — luego p.runs[0]
+    # revienta con IndexError ("tuple index out of range"). add_run() SIEMPRE
+    # crea un run, incluso vacio, asi que el formato de abajo nunca falla.
+    run = p.add_run()
+    run.text = text
     run.font.size = Pt(font_size)
     run.font.bold = bold
     if color:

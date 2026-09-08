@@ -143,6 +143,33 @@ def test_build_presentation_writes_summary_plus_detail_slides(tmp_path):
     assert len(prs.slides) == 2  # 1 portada + 1 slide de detalle (1 chunk de <=4 filas)
 
 
+def test_build_presentation_with_project_without_any_notes_does_not_crash(tmp_path):
+    # Regresion: un proyecto executing sin ninguna nota (todos los campos
+    # de texto en "") hacia que add_textbox reventara con IndexError
+    # ("tuple index out of range") porque python-pptx no crea ningun run
+    # para un parrafo con texto vacio via el setter p.text.
+    all_projects = [{"project_id": "A", "name": "Sin notas", "status": "executing", "hours_saved_per_month": 0}]
+    executing = [
+        ProjectStatus(
+            project_id="A",
+            name="Sin notas",
+            progress_percent=None,
+            progress_at=None,
+            general_note="",
+            next_step="",
+            blocker="",
+            risk="",
+        )
+    ]
+    summary = compute_portfolio_summary(all_projects)
+    out_path = tmp_path / "out.pptx"
+
+    build_presentation(all_projects, executing, summary, {}, out_path)
+
+    prs = PptxReader(str(out_path))
+    assert len(prs.slides) == 2
+
+
 def test_build_presentation_with_no_executing_projects_still_has_summary_slide(tmp_path):
     all_projects = [{"project_id": "A", "name": "Cerrado", "status": "implemented", "hours_saved_per_month": 100}]
     summary = compute_portfolio_summary(all_projects)

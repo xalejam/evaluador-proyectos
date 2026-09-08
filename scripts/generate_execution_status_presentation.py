@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -22,8 +23,7 @@ from domain.services.executive_summary_service import (
 
 PIPELINE_ORDER = ALL_STATUSES
 
-DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
-OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
+DEFAULT_OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
 LOGO_PATH = Path("logo_DDNola.png")
 
 # Paleta oficial Worldpanel (skill anthropic-skills:worldpanel-brand)
@@ -543,35 +543,84 @@ def build_slide(
     _draw_footer(slide, generated_at)
 
 
-def _build_prs(projects: list[ProjectStatus]) -> Presentation:
+def _build_prs(
+    all_projects: list[dict],
+    executing: list[ProjectStatus],
+    summary: PortfolioSummary,
+    notes_by_id: dict,
+) -> Presentation:
     prs = Presentation()
     prs.slide_width = SLIDE_W
     prs.slide_height = SLIDE_H
-    chunks = [projects[i : i + ROWS_PER_SLIDE] for i in range(0, len(projects), ROWS_PER_SLIDE)]
     generated_at = datetime.now().strftime("%d/%m/%Y %H:%M")
-    for n, chunk in enumerate(chunks, start=1):
-        build_slide(prs, chunk, n, len(chunks), projects, generated_at)
+
+    chunks = [executing[i : i + ROWS_PER_SLIDE] for i in range(0, len(executing), ROWS_PER_SLIDE)]
+    total_slides = 1 + len(chunks)
+
+    build_summary_slide(prs, summary, notes_by_id, all_projects, generated_at, 1, total_slides)
+    for n, chunk in enumerate(chunks, start=2):
+        build_slide(prs, chunk, n, total_slides, generated_at)
     return prs
 
 
-def build_presentation(projects: list[ProjectStatus], output_path: Path) -> Path:
-    prs = _build_prs(projects)
+def build_presentation(
+    all_projects: list[dict],
+    executing: list[ProjectStatus],
+    summary: PortfolioSummary,
+    notes_by_id: dict,
+    output_path: Path,
+) -> Path:
+    prs = _build_prs(all_projects, executing, summary, notes_by_id)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     prs.save(output_path)
     return output_path
 
 
-def build_presentation_bytes(projects: list[ProjectStatus]) -> bytes:
+def build_presentation_bytes(
+    all_projects: list[dict], executing: list[ProjectStatus], summary: PortfolioSummary, notes_by_id: dict
+) -> bytes:
     buf = BytesIO()
-    _build_prs(projects).save(buf)
+    _build_prs(all_projects, executing, summary, notes_by_id).save(buf)
     return buf.getvalue()
 
 
+def parse_args(argv=None):
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Genera el deck ejecutivo (resumen + detalle operativo).")
+    parser.add_argument("--notes", default=None, help="Ruta al JSON de notas por proyecto (opcional).")
+    parser.add_argument("--out", default=None, help="Ruta de salida del .pptx.")
+    return parser.parse_args(argv)
+
+
 def main() -> None:
-    projects = fetch_executing_projects(DB_PATH)
-    if not projects:
-        raise SystemExit("No hay proyectos con status 'executing'.")
-    path = build_presentation(projects, OUTPUT_PATH)
+    if not os.environ.get("DATABASE_URL"):
+        raise SystemExit(
+            "DATABASE_URL no está seteada. Este script requiere Supabase — "
+            "seteala en la sesión antes de correr (mismo requisito que /sync-bitacora)."
+        )
+
+    args = parse_args()
+
+    from infra.db.adapter import get_connection
+
+    conn = get_connection()
+    try:
+        all_projects = fetch_all_projects(conn)
+        executing = fetch_executing_projects(conn)
+    finally:
+        conn.close()
+
+    if not all_projects:
+        raise SystemExit("No hay proyectos en Supabase.")
+
+    from domain.services.executive_summary_service import compute_portfolio_summary, load_project_notes
+
+    summary = compute_portfolio_summary(all_projects)
+    notes_by_id = load_project_notes(args.notes)
+    out_path = Path(args.out) if args.out else DEFAULT_OUTPUT_PATH
+
+    path = build_presentation(all_projects, executing, summary, notes_by_id, out_path)
     print(path)
 
 

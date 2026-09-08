@@ -1,8 +1,12 @@
 import sqlite3
 
+from pptx import Presentation as PptxReader
+
+from domain.services.executive_summary_service import compute_portfolio_summary
 from infra.db.adapter import get_connection
 from scripts.generate_execution_status_presentation import (
     ProjectStatus,
+    build_presentation,
     fetch_all_projects,
     fetch_executing_projects,
 )
@@ -109,3 +113,36 @@ def test_fetch_executing_projects_returns_empty_list_when_none_executing(tmp_pat
     conn.close()
 
     assert rows == []
+
+
+def test_build_presentation_writes_summary_plus_detail_slides(tmp_path):
+    all_projects = [
+        {"project_id": "A", "name": "Cerrado", "status": "implemented", "hours_saved_per_month": 100},
+        {"project_id": "B", "name": "Activo", "status": "executing", "hours_saved_per_month": 0},
+    ]
+    executing = [
+        ProjectStatus(
+            project_id="B", name="Activo", progress_percent=50, progress_at="2026-09-01",
+            general_note="nota", next_step="paso", blocker="", risk="",
+        )
+    ]
+    summary = compute_portfolio_summary(all_projects)
+    out_path = tmp_path / "out.pptx"
+
+    result_path = build_presentation(all_projects, executing, summary, {}, out_path)
+
+    assert result_path == out_path
+    assert out_path.exists()
+    prs = PptxReader(str(out_path))
+    assert len(prs.slides) == 2  # 1 portada + 1 slide de detalle (1 chunk de <=4 filas)
+
+
+def test_build_presentation_with_no_executing_projects_still_has_summary_slide(tmp_path):
+    all_projects = [{"project_id": "A", "name": "Cerrado", "status": "implemented", "hours_saved_per_month": 100}]
+    summary = compute_portfolio_summary(all_projects)
+    out_path = tmp_path / "out.pptx"
+
+    build_presentation(all_projects, [], summary, {}, out_path)
+
+    prs = PptxReader(str(out_path))
+    assert len(prs.slides) == 1

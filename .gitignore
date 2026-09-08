@@ -22,6 +22,7 @@ Thumbs.db
 # Environment files
 .env
 .env.*
+!.env.example
 # Git worktrees
 .worktrees/
 # Streamlit secrets (nunca commitear)

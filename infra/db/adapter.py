@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from pathlib import Path
 from typing import Any
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 _DATABASE_URL = os.environ.get("DATABASE_URL", "")
 IS_CLOUD = bool(_DATABASE_URL)

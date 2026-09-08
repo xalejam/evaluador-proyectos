@@ -529,7 +529,7 @@ def build_summary_slide(
     add_textbox(
         slide,
         Inches(0.45),
-        Inches(2.05),
+        Inches(2.40),
         Inches(12.4),
         Inches(0.5),
         f"Cada mes, el equipo ahorra el equivalente a {summary.fte_equivalent} de trabajo de una "
@@ -538,7 +538,7 @@ def build_summary_slide(
         color=C_TEXT_DARK,
     )
 
-    _draw_pipeline(slide, summary.status_counts, Inches(2.75))
+    _draw_pipeline(slide, summary.status_counts, Inches(3.10))
     _draw_speaker_notes(slide, summary, notes_by_id, all_projects)
     _draw_footer(slide, generated_at)
 

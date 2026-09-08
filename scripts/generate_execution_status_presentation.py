@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Iterable
 
-from pptx import Presentation
-from pptx.dml.color import RGBColor
-from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
-from pptx.enum.text import PP_ALIGN
-from pptx.util import Emu, Inches, Pt
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from domain.services.executive_summary_service import (
+from pptx import Presentation  # noqa: E402
+from pptx.dml.color import RGBColor  # noqa: E402
+from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE  # noqa: E402
+from pptx.enum.text import PP_ALIGN  # noqa: E402
+from pptx.util import Emu, Inches, Pt  # noqa: E402
+
+from domain.services.executive_summary_service import (  # noqa: E402
     ALL_STATUSES,
     STATUS_LABELS_ES,
     PortfolioSummary,

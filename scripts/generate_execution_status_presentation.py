@@ -79,32 +79,25 @@ class ProjectStatus:
     risk: str
 
 
-def fetch_executing_projects(db_path: Path) -> list[ProjectStatus]:
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+def fetch_all_projects(conn) -> list[dict]:
+    rows = conn.execute(
+        "SELECT project_id, name, status, description, closed_at, hours_saved_per_month FROM projects"
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def fetch_executing_projects(conn) -> list[ProjectStatus]:
     sql = """
     WITH latest_progress AS (
-        SELECT h.project_id, h.progress_percent, h.created_at
-        FROM v_project_progress_history h
-        JOIN (
-            SELECT project_id, MAX(datetime(created_at)) AS max_created_at
-            FROM v_project_progress_history
-            GROUP BY project_id
-        ) mx
-          ON mx.project_id = h.project_id
-         AND datetime(mx.max_created_at) = datetime(h.created_at)
+        SELECT project_id, progress_percent, created_at,
+               ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY created_at DESC) AS rn
+        FROM project_notes
+        WHERE progress_percent IS NOT NULL
     ),
     latest_notes AS (
-        SELECT
-            n.project_id,
-            n.note_type,
-            n.note_text,
-            n.created_at,
-            ROW_NUMBER() OVER (
-                PARTITION BY n.project_id, n.note_type
-                ORDER BY datetime(n.created_at) DESC, n.note_id DESC
-            ) AS rn
-        FROM project_notes n
+        SELECT project_id, note_type, note_text, created_at,
+               ROW_NUMBER() OVER (PARTITION BY project_id, note_type ORDER BY created_at DESC) AS rn
+        FROM project_notes
     )
     SELECT
         p.project_id,
@@ -116,21 +109,15 @@ def fetch_executing_projects(db_path: Path) -> list[ProjectStatus]:
         COALESCE(bn.note_text, '') AS blocker,
         COALESCE(rk.note_text, '') AS risk
     FROM projects p
-    LEFT JOIN latest_progress lp
-        ON lp.project_id = p.project_id
-    LEFT JOIN latest_notes gn
-        ON gn.project_id = p.project_id AND gn.note_type = 'general' AND gn.rn = 1
-    LEFT JOIN latest_notes pn
-        ON pn.project_id = p.project_id AND pn.note_type = 'proximo_paso' AND pn.rn = 1
-    LEFT JOIN latest_notes bn
-        ON bn.project_id = p.project_id AND bn.note_type = 'bloqueador' AND bn.rn = 1
-    LEFT JOIN latest_notes rk
-        ON rk.project_id = p.project_id AND rk.note_type = 'riesgo' AND rk.rn = 1
+    LEFT JOIN latest_progress lp ON lp.project_id = p.project_id AND lp.rn = 1
+    LEFT JOIN latest_notes gn ON gn.project_id = p.project_id AND gn.note_type = 'general' AND gn.rn = 1
+    LEFT JOIN latest_notes pn ON pn.project_id = p.project_id AND pn.note_type = 'proximo_paso' AND pn.rn = 1
+    LEFT JOIN latest_notes bn ON bn.project_id = p.project_id AND bn.note_type = 'bloqueador' AND bn.rn = 1
+    LEFT JOIN latest_notes rk ON rk.project_id = p.project_id AND rk.note_type = 'riesgo' AND rk.rn = 1
     WHERE lower(COALESCE(p.status, '')) = 'executing'
     ORDER BY COALESCE(lp.created_at, p.updated_at, p.created_date) DESC, p.project_id
     """
     rows = conn.execute(sql).fetchall()
-    conn.close()
     return [ProjectStatus(**dict(row)) for row in rows]
 
 

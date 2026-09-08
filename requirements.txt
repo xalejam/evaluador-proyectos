@@ -10,3 +10,4 @@ requests-ntlm
 psycopg2-binary
 bcrypt
 PyYAML
+python-dotenv

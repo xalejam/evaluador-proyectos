@@ -1,3 +1,4 @@
+import json
 import sqlite3
 
 from pptx import Presentation as PptxReader
@@ -9,6 +10,7 @@ from scripts.generate_execution_status_presentation import (
     build_presentation,
     fetch_all_projects,
     fetch_executing_projects,
+    portfolio_summary_to_json,
 )
 
 SCHEMA = """
@@ -146,3 +148,20 @@ def test_build_presentation_with_no_executing_projects_still_has_summary_slide(t
 
     prs = PptxReader(str(out_path))
     assert len(prs.slides) == 1
+
+
+def test_portfolio_summary_to_json_has_exactly_the_four_expected_fields():
+    all_projects = [
+        {"project_id": "A", "name": "Cerrado", "status": "implemented", "hours_saved_per_month": 100},
+        {"project_id": "B", "name": "Activo", "status": "executing", "hours_saved_per_month": 0},
+    ]
+    summary = compute_portfolio_summary(all_projects)
+
+    payload = json.loads(portfolio_summary_to_json(summary))
+
+    assert payload == {
+        "hours_saved_closed": summary.hours_saved_closed,
+        "fte_equivalent": summary.fte_equivalent,
+        "closed_count": summary.closed_count,
+        "executing_count": summary.executing_count,
+    }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from dataclasses import dataclass
@@ -584,6 +585,17 @@ def build_presentation_bytes(
     return buf.getvalue()
 
 
+def portfolio_summary_to_json(summary: PortfolioSummary) -> str:
+    return json.dumps(
+        {
+            "hours_saved_closed": summary.hours_saved_closed,
+            "fte_equivalent": summary.fte_equivalent,
+            "closed_count": summary.closed_count,
+            "executing_count": summary.executing_count,
+        }
+    )
+
+
 def parse_args(argv=None):
     import argparse
 
@@ -622,6 +634,7 @@ def main() -> None:
 
     path = build_presentation(all_projects, executing, summary, notes_by_id, out_path)
     print(path)
+    print(portfolio_summary_to_json(summary))
 
 
 if __name__ == "__main__":

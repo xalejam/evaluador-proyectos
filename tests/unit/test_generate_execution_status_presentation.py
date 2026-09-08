@@ -1,17 +1,31 @@
 import json
 import sqlite3
+from io import BytesIO
 
+import pytest
 from pptx import Presentation as PptxReader
 
+import infra.presentation_ports
 from domain.services.executive_summary_service import compute_portfolio_summary
 from infra.db.adapter import get_connection
 from scripts.generate_execution_status_presentation import (
+    ROWS_PER_SLIDE,
     ProjectStatus,
+    build_detail_only_presentation_bytes,
     build_presentation,
     fetch_all_projects,
     fetch_executing_projects,
     portfolio_summary_to_json,
 )
+
+
+@pytest.fixture(autouse=True)
+def _force_sqlite_connection(monkeypatch):
+    """Garantiza que get_connection(local_path=...) use SQLite en estos tests,
+    sin importar si DATABASE_URL esta seteada en el entorno del desarrollador.
+    """
+    monkeypatch.setattr("infra.db.adapter.IS_CLOUD", False)
+
 
 SCHEMA = """
 CREATE TABLE projects (
@@ -124,8 +138,14 @@ def test_build_presentation_writes_summary_plus_detail_slides(tmp_path):
     ]
     executing = [
         ProjectStatus(
-            project_id="B", name="Activo", progress_percent=50, progress_at="2026-09-01",
-            general_note="nota", next_step="paso", blocker="", risk="",
+            project_id="B",
+            name="Activo",
+            progress_percent=50,
+            progress_at="2026-09-01",
+            general_note="nota",
+            next_step="paso",
+            blocker="",
+            risk="",
         )
     ]
     summary = compute_portfolio_summary(all_projects)
@@ -165,3 +185,31 @@ def test_portfolio_summary_to_json_has_exactly_the_four_expected_fields():
         "closed_count": summary.closed_count,
         "executing_count": summary.executing_count,
     }
+
+
+def test_build_detail_only_presentation_bytes_has_no_cover_slide():
+    executing = [
+        ProjectStatus(
+            project_id=f"P{i}",
+            name=f"Proyecto {i}",
+            progress_percent=50,
+            progress_at="2026-09-01",
+            general_note="nota",
+            next_step="paso",
+            blocker="",
+            risk="",
+        )
+        for i in range(5)
+    ]
+    expected_slides = -(-len(executing) // ROWS_PER_SLIDE)  # ceil division, sin portada
+
+    data = build_detail_only_presentation_bytes(executing)
+
+    prs = PptxReader(BytesIO(data))
+    assert len(prs.slides) == expected_slides
+    assert expected_slides == 2  # 5 proyectos / 4 por slide -> 2 slides de detalle, sin portada
+
+
+def test_presentation_ports_no_longer_exposes_build_presentation_bytes():
+    assert not hasattr(infra.presentation_ports, "build_presentation_bytes")
+    assert hasattr(infra.presentation_ports, "build_detail_only_presentation_bytes")

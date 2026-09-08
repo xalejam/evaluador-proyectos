@@ -1,6 +1,11 @@
 import json
 
-from domain.services.executive_summary_service import format_fte_equivalent, PortfolioSummary, compute_portfolio_summary, load_project_notes, resolve_project_note
+from domain.services.executive_summary_service import (
+    compute_portfolio_summary,
+    format_fte_equivalent,
+    load_project_notes,
+    resolve_project_note,
+)
 
 
 def test_fte_under_8_weeks_shows_weeks_and_hours():
@@ -62,8 +67,14 @@ def test_compute_portfolio_summary_status_counts_include_zeros():
     projects = [_project("A", "Proyecto A", "implemented", hours=10)]
     summary = compute_portfolio_summary(projects)
     assert summary.status_counts == {
-        "evaluated": 0, "backlog": 0, "approved": 0, "executing": 0,
-        "implemented": 1, "on_hold": 0, "handed_off": 0, "rejected": 0,
+        "evaluated": 0,
+        "backlog": 0,
+        "approved": 0,
+        "executing": 0,
+        "implemented": 1,
+        "on_hold": 0,
+        "handed_off": 0,
+        "rejected": 0,
     }
 
 
@@ -94,12 +105,14 @@ def test_load_project_notes_returns_empty_dict_when_file_missing(tmp_path):
 def test_load_project_notes_indexes_by_project_id(tmp_path):
     path = tmp_path / "notas.json"
     path.write_text(
-        json.dumps({
-            "generated_at": "2026-09-04",
-            "projects": [
-                {"project_id": "MX-DDD-0005", "que_es": "Automatiza Order Forms.", "estado_frase": "Implementado."},
-            ],
-        }),
+        json.dumps(
+            {
+                "generated_at": "2026-09-04",
+                "projects": [
+                    {"project_id": "MX-DDD-0005", "que_es": "Automatiza Order Forms.", "estado_frase": "Implementado."},
+                ],
+            }
+        ),
         encoding="utf-8",
     )
     notes = load_project_notes(str(path))

@@ -1,4 +1,5 @@
 """Adaptador de conexión que unifica sqlite3 y psycopg2."""
+
 from __future__ import annotations
 
 import os

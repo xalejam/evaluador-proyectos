@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
@@ -53,7 +52,7 @@ C_STATUS = {
     "evaluated": RGBColor(0xFF, 0x82, 0x00),  # Orange
     "backlog": RGBColor(0xFF, 0x82, 0x00),  # Orange
     "approved": RGBColor(0x01, 0x79, 0xFF),  # Cobalt
-    "executing": RGBColor(0x1A, 0xA7, 0xB7),  # Worldpanel Blue (variante chart)
+    "executing": RGBColor(0x00, 0xA8, 0xB8),  # Worldpanel Blue
     "implemented": RGBColor(0x2B, 0xEF, 0xB9),  # Mint
     "on_hold": RGBColor(0xFF, 0xD6, 0x1F),  # Yellow
     "handed_off": RGBColor(0x00, 0x4A, 0x52),  # Deep Teal
@@ -113,13 +112,13 @@ def fetch_executing_projects(conn) -> list[ProjectStatus]:
     sql = """
     WITH latest_progress AS (
         SELECT project_id, progress_percent, created_at,
-               ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY created_at DESC) AS rn
+               ROW_NUMBER() OVER (PARTITION BY project_id ORDER BY created_at DESC, note_id DESC) AS rn
         FROM project_notes
         WHERE progress_percent IS NOT NULL
     ),
     latest_notes AS (
         SELECT project_id, note_type, note_text, created_at,
-               ROW_NUMBER() OVER (PARTITION BY project_id, note_type ORDER BY created_at DESC) AS rn
+               ROW_NUMBER() OVER (PARTITION BY project_id, note_type ORDER BY created_at DESC, note_id DESC) AS rn
         FROM project_notes
     )
     SELECT
@@ -199,15 +198,15 @@ def add_textbox(slide, left, top, width, height, text, font_size, *, bold=False,
 
 
 def add_metric_card(slide, left, title, value, subtitle):
-    card = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE, left, Inches(1.05), Inches(2.2), Inches(1.0))
+    card = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.ROUNDED_RECTANGLE, left, Inches(1.05), Inches(2.2), Inches(1.25))
     card.fill.solid()
     card.fill.fore_color.rgb = C_CARD_BG
     card.line.color.rgb = C_CARD_BORDER
     add_textbox(slide, left + Inches(0.12), Inches(1.13), Inches(1.95), Inches(0.22), title, 10, color=C_TEXT_BLUE)
     add_textbox(
-        slide, left + Inches(0.12), Inches(1.35), Inches(1.95), Inches(0.3), value, 20, bold=True, color=C_TEXT_DARK
+        slide, left + Inches(0.12), Inches(1.35), Inches(1.95), Inches(0.55), value, 20, bold=True, color=C_TEXT_DARK
     )
-    add_textbox(slide, left + Inches(0.12), Inches(1.68), Inches(1.95), Inches(0.2), subtitle, 9, color=C_TEXT_LIGHT)
+    add_textbox(slide, left + Inches(0.12), Inches(1.93), Inches(1.95), Inches(0.2), subtitle, 9, color=C_TEXT_LIGHT)
 
 
 def _draw_header(slide, prs, slide_num: int, total_slides: int, title: str, subtitle: str) -> None:
@@ -216,17 +215,20 @@ def _draw_header(slide, prs, slide_num: int, total_slides: int, title: str, subt
     header.fill.fore_color.rgb = C_HEADER_BG
     header.line.color.rgb = C_HEADER_BG
 
-    add_textbox(
-        slide, Inches(0.45), Inches(0.18), Inches(9.0), Inches(0.3), title, 24, bold=True, color=C_HEADER_TEXT
-    )
-    add_textbox(
-        slide, Inches(0.45), Inches(0.5), Inches(6.0), Inches(0.18), subtitle, 9, color=C_HEADER_SUB
-    )
+    add_textbox(slide, Inches(0.45), Inches(0.18), Inches(9.0), Inches(0.3), title, 24, bold=True, color=C_HEADER_TEXT)
+    add_textbox(slide, Inches(0.45), Inches(0.5), Inches(6.0), Inches(0.18), subtitle, 9, color=C_HEADER_SUB)
 
     if total_slides > 1:
         add_textbox(
-            slide, Inches(10.3), Inches(0.28), Inches(1.5), Inches(0.18),
-            f"{slide_num} / {total_slides}", 10, color=C_HEADER_CUT, align=PP_ALIGN.RIGHT,
+            slide,
+            Inches(10.3),
+            Inches(0.28),
+            Inches(1.5),
+            Inches(0.18),
+            f"{slide_num} / {total_slides}",
+            10,
+            color=C_HEADER_CUT,
+            align=PP_ALIGN.RIGHT,
         )
 
     if LOGO_PATH.exists():
@@ -291,7 +293,7 @@ def _draw_project_row(slide, project: ProjectStatus, row_index: int, row_start_y
         f"{progress}%",
         16,
         bold=True,
-        color=RGBColor(255, 255, 255),
+        color=C_TEXT_DARK,
         align=PP_ALIGN.CENTER,
     )
 
@@ -421,8 +423,15 @@ def _draw_footer(slide, generated_at: str) -> None:
 def _draw_pipeline(slide, status_counts: dict[str, int], top) -> None:
     total = sum(status_counts.values()) or 1
     add_textbox(
-        slide, Inches(0.45), top, Inches(6.0), Inches(0.2),
-        f"Pipeline del portafolio · {sum(status_counts.values())} proyectos", 9, bold=True, color=C_TEXT_LIGHT,
+        slide,
+        Inches(0.45),
+        top,
+        Inches(6.0),
+        Inches(0.2),
+        f"Pipeline del portafolio · {sum(status_counts.values())} proyectos",
+        9,
+        bold=True,
+        color=C_TEXT_LIGHT,
     )
 
     bar_top = top + Inches(0.3)
@@ -444,13 +453,21 @@ def _draw_pipeline(slide, status_counts: dict[str, int], top) -> None:
     col_w = Inches(1.55)
     for i, status in enumerate(PIPELINE_ORDER):
         cx = Emu(int(bar_left) + int(col_w) * i)
-        dot = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.OVAL, cx, legend_top + Inches(0.03), Inches(0.12), Inches(0.12))
+        dot = slide.shapes.add_shape(
+            MSO_AUTO_SHAPE_TYPE.OVAL, cx, legend_top + Inches(0.03), Inches(0.12), Inches(0.12)
+        )
         dot.fill.solid()
         dot.fill.fore_color.rgb = C_STATUS[status]
         dot.line.color.rgb = C_STATUS[status]
         add_textbox(
-            slide, cx + Inches(0.18), legend_top, Inches(1.35), Inches(0.2),
-            f"{STATUS_LABELS_ES[status]} {status_counts[status]}", 8, color=C_TEXT_MID,
+            slide,
+            cx + Inches(0.18),
+            legend_top,
+            Inches(1.35),
+            Inches(0.2),
+            f"{STATUS_LABELS_ES[status]} {status_counts[status]}",
+            8,
+            color=C_TEXT_MID,
         )
 
 
@@ -492,7 +509,10 @@ def build_summary_slide(
     bg.fore_color.rgb = C_BODY_BG
 
     _draw_header(
-        slide, prs, slide_num, total_slides,
+        slide,
+        prs,
+        slide_num,
+        total_slides,
         title="Resumen ejecutivo · Portafolio Data & Automatización",
         subtitle=f"Corte: {generated_at} · Fuente: Supabase (projects)",
     )
@@ -507,10 +527,15 @@ def build_summary_slide(
         add_metric_card(slide, Inches(0.45 + i * 2.45), title, value, subtitle)
 
     add_textbox(
-        slide, Inches(0.45), Inches(2.05), Inches(12.4), Inches(0.5),
+        slide,
+        Inches(0.45),
+        Inches(2.05),
+        Inches(12.4),
+        Inches(0.5),
         f"Cada mes, el equipo ahorra el equivalente a {summary.fte_equivalent} de trabajo de una "
         f"persona a tiempo completo — con base en las {summary.closed_count} automatizaciones ya cerradas.",
-        12, color=C_TEXT_DARK,
+        12,
+        color=C_TEXT_DARK,
     )
 
     _draw_pipeline(slide, summary.status_counts, Inches(2.75))
@@ -531,7 +556,10 @@ def build_slide(
     bg.fore_color.rgb = C_BODY_BG
 
     _draw_header(
-        slide, prs, slide_num, total_slides,
+        slide,
+        prs,
+        slide_num,
+        total_slides,
         title="Detalle · Proyectos en ejecución",
         subtitle="Fuente: Supabase (project_notes)",
     )
@@ -585,6 +613,29 @@ def build_presentation_bytes(
     return buf.getvalue()
 
 
+def build_detail_only_presentation_bytes(executing: list[ProjectStatus]) -> bytes:
+    """Genera solo las diapositivas de detalle (sin portada de resumen).
+
+    Preserva el comportamiento previo a la portada de resumen para el boton
+    "Generar presentacion" de Seguimiento Operativo, que sigue trabajando con
+    su propia consulta y no con el flujo de portafolio completo.
+    """
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+    generated_at = datetime.now().strftime("%d/%m/%Y %H:%M")
+
+    chunks = [executing[i : i + ROWS_PER_SLIDE] for i in range(0, len(executing), ROWS_PER_SLIDE)]
+    total_slides = len(chunks)
+
+    for n, chunk in enumerate(chunks, start=1):
+        build_slide(prs, chunk, n, total_slides, generated_at)
+
+    buf = BytesIO()
+    prs.save(buf)
+    return buf.getvalue()
+
+
 def portfolio_summary_to_json(summary: PortfolioSummary) -> str:
     return json.dumps(
         {
@@ -606,6 +657,8 @@ def parse_args(argv=None):
 
 
 def main() -> None:
+    from infra.db.adapter import get_connection
+
     if not os.environ.get("DATABASE_URL"):
         raise SystemExit(
             "DATABASE_URL no está seteada. Este script requiere Supabase — "
@@ -613,8 +666,6 @@ def main() -> None:
         )
 
     args = parse_args()
-
-    from infra.db.adapter import get_connection
 
     conn = get_connection()
     try:

@@ -11,7 +11,16 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_AUTO_SHAPE_TYPE
 from pptx.enum.text import PP_ALIGN
-from pptx.util import Inches, Pt
+from pptx.util import Emu, Inches, Pt
+
+from domain.services.executive_summary_service import (
+    ALL_STATUSES,
+    STATUS_LABELS_ES,
+    PortfolioSummary,
+    resolve_project_note,
+)
+
+PIPELINE_ORDER = ALL_STATUSES
 
 DB_PATH = Path(__file__).resolve().parent.parent / "project_viability.db"
 OUTPUT_PATH = Path("docs") / "Resumen_Proyectos_Ejecucion.pptx"
@@ -200,45 +209,23 @@ def add_metric_card(slide, left, title, value, subtitle):
     add_textbox(slide, left + Inches(0.12), Inches(1.68), Inches(1.95), Inches(0.2), subtitle, 9, color=C_TEXT_LIGHT)
 
 
-def _draw_header(slide, prs, slide_num: int, total_slides: int) -> None:
+def _draw_header(slide, prs, slide_num: int, total_slides: int, title: str, subtitle: str) -> None:
     header = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.RECTANGLE, 0, 0, prs.slide_width, HEADER_H)
     header.fill.solid()
     header.fill.fore_color.rgb = C_HEADER_BG
     header.line.color.rgb = C_HEADER_BG
 
     add_textbox(
-        slide,
-        Inches(0.45),
-        Inches(0.18),
-        Inches(9.0),
-        Inches(0.3),
-        "Resumen ejecutivo | Proyectos en ejecucion",
-        24,
-        bold=True,
-        color=C_HEADER_TEXT,
+        slide, Inches(0.45), Inches(0.18), Inches(9.0), Inches(0.3), title, 24, bold=True, color=C_HEADER_TEXT
     )
     add_textbox(
-        slide,
-        Inches(0.45),
-        Inches(0.5),
-        Inches(4.3),
-        Inches(0.18),
-        "Fuente: project_viability.db",
-        9,
-        color=C_HEADER_SUB,
+        slide, Inches(0.45), Inches(0.5), Inches(6.0), Inches(0.18), subtitle, 9, color=C_HEADER_SUB
     )
 
     if total_slides > 1:
         add_textbox(
-            slide,
-            Inches(10.3),
-            Inches(0.28),
-            Inches(1.5),
-            Inches(0.18),
-            f"{slide_num} / {total_slides}",
-            10,
-            color=C_HEADER_CUT,
-            align=PP_ALIGN.RIGHT,
+            slide, Inches(10.3), Inches(0.28), Inches(1.5), Inches(0.18),
+            f"{slide_num} / {total_slides}", 10, color=C_HEADER_CUT, align=PP_ALIGN.RIGHT,
         )
 
     if LOGO_PATH.exists():
@@ -406,28 +393,6 @@ def _draw_project_row(slide, project: ProjectStatus, row_index: int, row_start_y
     )
 
 
-def _draw_metrics(slide, all_projects: list[ProjectStatus]) -> None:
-    no_blockers = sum(1 for p in all_projects if (p.blocker or "").strip().lower() in {"", "ninguno", "ninguna"})
-    add_metric_card(slide, Inches(0.45), "Proyectos activos", str(len(all_projects)), "estatus executing")
-    add_metric_card(
-        slide, Inches(2.9), "Avance promedio", f"{average_progress(all_projects)}%", "segun ultimo registro"
-    )
-    add_metric_card(slide, Inches(5.35), "Sin bloqueadores", str(no_blockers), "ultimo reporte")
-    add_metric_card(slide, Inches(7.8), "Ultima actualizacion", latest_update(all_projects), "avance mas reciente")
-    add_metric_card(slide, Inches(10.25), "Mensaje clave", f"{len(all_projects)} frentes", "sin bloqueos criticos")
-
-    add_textbox(
-        slide,
-        Inches(0.45),
-        Inches(1.98),
-        Inches(12.0),
-        Inches(0.18),
-        "Todos los proyectos en ejecucion reportan avance y no muestran bloqueadores ni riesgos criticos en la ultima nota.",
-        11,
-        color=C_TEXT_MID,
-    )
-
-
 def _draw_footer(slide, generated_at: str) -> None:
     add_textbox(
         slide,
@@ -452,12 +417,111 @@ def _draw_footer(slide, generated_at: str) -> None:
     )
 
 
+def _draw_pipeline(slide, status_counts: dict[str, int], top) -> None:
+    total = sum(status_counts.values()) or 1
+    add_textbox(
+        slide, Inches(0.45), top, Inches(6.0), Inches(0.2),
+        f"Pipeline del portafolio · {sum(status_counts.values())} proyectos", 9, bold=True, color=C_TEXT_LIGHT,
+    )
+
+    bar_top = top + Inches(0.3)
+    bar_left = Inches(0.45)
+    bar_width_total = Inches(12.4)
+    x = int(bar_left)
+    for status in PIPELINE_ORDER:
+        count = status_counts[status]
+        if count == 0:
+            continue
+        seg_w = int(bar_width_total * (count / total))
+        seg = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.RECTANGLE, Emu(x), bar_top, Emu(seg_w), Inches(0.3))
+        seg.fill.solid()
+        seg.fill.fore_color.rgb = C_STATUS[status]
+        seg.line.color.rgb = C_STATUS[status]
+        x += seg_w
+
+    legend_top = bar_top + Inches(0.45)
+    col_w = Inches(1.55)
+    for i, status in enumerate(PIPELINE_ORDER):
+        cx = Emu(int(bar_left) + int(col_w) * i)
+        dot = slide.shapes.add_shape(MSO_AUTO_SHAPE_TYPE.OVAL, cx, legend_top + Inches(0.03), Inches(0.12), Inches(0.12))
+        dot.fill.solid()
+        dot.fill.fore_color.rgb = C_STATUS[status]
+        dot.line.color.rgb = C_STATUS[status]
+        add_textbox(
+            slide, cx + Inches(0.18), legend_top, Inches(1.35), Inches(0.2),
+            f"{STATUS_LABELS_ES[status]} {status_counts[status]}", 8, color=C_TEXT_MID,
+        )
+
+
+def _draw_speaker_notes(slide, summary: PortfolioSummary, notes_by_id: dict, all_projects: list[dict]) -> None:
+    lines = [
+        "Supuesto: 40 horas/semana = 1 persona a tiempo completo. La unidad "
+        "(semanas/meses/años) se elige según la magnitud del total.",
+        f"Principal contribuyente: {summary.top_contributor}.",
+        "",
+        "Proyectos, por estado:",
+    ]
+    by_status: dict[str, list[str]] = {}
+    for p in all_projects:
+        que_es, estado_frase = resolve_project_note(p, notes_by_id)
+        by_status.setdefault(p["status"], []).append(f"- {p['name']}: {que_es} {estado_frase}")
+
+    for status in PIPELINE_ORDER:
+        rows = by_status.get(status)
+        if not rows:
+            continue
+        lines.append(f"\n{STATUS_LABELS_ES[status]}:")
+        lines.extend(rows)
+
+    slide.notes_slide.notes_text_frame.text = "\n".join(lines)
+
+
+def build_summary_slide(
+    prs: Presentation,
+    summary: PortfolioSummary,
+    notes_by_id: dict,
+    all_projects: list[dict],
+    generated_at: str,
+    slide_num: int,
+    total_slides: int,
+) -> None:
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    bg = slide.background.fill
+    bg.solid()
+    bg.fore_color.rgb = C_BODY_BG
+
+    _draw_header(
+        slide, prs, slide_num, total_slides,
+        title="Resumen ejecutivo · Portafolio Data & Automatización",
+        subtitle=f"Corte: {generated_at} · Fuente: Supabase (projects)",
+    )
+
+    cards = [
+        ("Horas ahorradas / mes", f"{summary.hours_saved_closed:,.0f} h", "proyectos cerrados"),
+        ("Equivale a", summary.fte_equivalent, "1 persona, tiempo completo"),
+        ("Proyectos cerrados", str(summary.closed_count), "implementados + entregados"),
+        ("En ejecución", str(summary.executing_count), "activos hoy"),
+    ]
+    for i, (title, value, subtitle) in enumerate(cards):
+        add_metric_card(slide, Inches(0.45 + i * 2.45), title, value, subtitle)
+
+    add_textbox(
+        slide, Inches(0.45), Inches(2.05), Inches(12.4), Inches(0.5),
+        f"Cada mes, el equipo ahorra el equivalente a {summary.fte_equivalent} de trabajo de una "
+        f"persona a tiempo completo — con base en las {summary.closed_count} automatizaciones ya cerradas.",
+        12, color=C_TEXT_DARK,
+    )
+
+    _draw_pipeline(slide, summary.status_counts, Inches(2.75))
+    _draw_speaker_notes(slide, summary, notes_by_id, all_projects)
+    _draw_footer(slide, generated_at)
+
+
 def build_slide(
     prs: Presentation,
     chunk: list[ProjectStatus],
     slide_num: int,
     total_slides: int,
-    all_projects: list[ProjectStatus],
     generated_at: str,
 ) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[6])
@@ -465,20 +529,16 @@ def build_slide(
     bg.solid()
     bg.fore_color.rgb = C_BODY_BG
 
-    _draw_header(slide, prs, slide_num, total_slides)
+    _draw_header(
+        slide, prs, slide_num, total_slides,
+        title="Detalle · Proyectos en ejecución",
+        subtitle="Fuente: Supabase (project_notes)",
+    )
 
-    if slide_num == 1:
-        _draw_metrics(slide, all_projects)
-        col_hdr_y = COL_HEADER_Y_S1
-        row_start_y = ROW_START_Y_S1
-    else:
-        col_hdr_y = COL_HEADER_Y_SN
-        row_start_y = ROW_START_Y_SN
-
-    _draw_column_headers(slide, col_hdr_y)
+    _draw_column_headers(slide, COL_HEADER_Y_SN)
 
     for i, project in enumerate(chunk):
-        _draw_project_row(slide, project, i, row_start_y)
+        _draw_project_row(slide, project, i, ROW_START_Y_SN)
 
     _draw_footer(slide, generated_at)
 

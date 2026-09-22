@@ -192,9 +192,9 @@ def add_textbox(slide, left, top, width, height, text, font_size, *, bold=False,
     tf = box.text_frame
     tf.word_wrap = True
     p = tf.paragraphs[0]
-    p.text = text
     p.alignment = align
-    run = p.runs[0]
+    run = p.add_run()
+    run.text = text
     run.font.size = Pt(font_size)
     run.font.bold = bold
     if color:
